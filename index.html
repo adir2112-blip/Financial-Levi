@@ -783,7 +783,7 @@ async function loadFromDB() {
   if (!DB_READY) return;
   const { data: txData, error: txErr } = await db.from('transactions').select('*').order('created_at', { ascending: false });
   if (!txErr && txData) {
-    TXS = txData.map(r => ({ date: r.date, desc: r.desc, cat: r.cat, src: r.src, amt: parseFloat(r.amt), tp: r.tp }));
+    TXS = txData.map(r => ({ date: r.date, desc: r.description, cat: r.cat, src: r.src, amt: parseFloat(r.amt), tp: r.tp }));
   }
   const { data: recData, error: recErr } = await db.from('recurring').select('*');
   if (!recErr && recData) {
@@ -807,8 +807,8 @@ async function saveTxsToDB(newTxs) {
     saveToLocalStorage();
     return;
   }
-  const rows = newTxs.map(t => ({ date: t.date, desc: t.desc, cat: t.cat, src: t.src, amt: t.amt, tp: t.tp }));
-  const { error } = await db.from('transactions').upsert(rows, { onConflict: 'date,desc,amt' });
+  const rows = newTxs.map(t => ({ date: t.date, description: t.desc, cat: t.cat, src: t.src, amt: t.amt, tp: t.tp }));
+  const { error } = await db.from('transactions').upsert(rows, { onConflict: 'date,description,amt' });
   if (error) { console.error('DB save error:', error); saveToLocalStorage(); }
   else showSyncStatus('✓ נשמר בענן — ' + new Date().toLocaleTimeString('he-IL'), 'green');
 }
