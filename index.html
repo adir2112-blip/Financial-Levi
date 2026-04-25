@@ -7,6 +7,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700&family=Playfair+Display:wght@500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <style>
 :root{--cream:#f7f4ef;--cream2:#ede9e1;--white:#fff;--ink:#1a1a18;--ink2:#3d3d38;--muted:#8a8880;--faint:#c0bdb7;--olive:#4a6741;--olive-lt:#6a9260;--olive-pale:#edf2ec;--olive-mid:#b8d4b5;--sand:#c4986a;--red:#c0392b;--red-pale:#fdf0ee;--blue:#2c5f8a;--border:rgba(26,26,24,.07);--border2:rgba(26,26,24,.12);--sh-sm:0 1px 3px rgba(26,26,24,.05),0 1px 2px rgba(26,26,24,.04);--sh:0 4px 20px rgba(26,26,24,.07);--sh-lg:0 16px 48px rgba(26,26,24,.12)}
 *{margin:0;padding:0;box-sizing:border-box}
@@ -666,6 +667,7 @@ function importExcelMulti(input) {
         TXS.sort((a,b)=>{const pd=s=>{if(!s)return 0;const[d,m]=s.split('/');return parseInt(m)*100+parseInt(d);};return pd(b.date)-pd(a.date);});
         input.value = '';
         refreshAll();
+        saveTxsToDB(TXS).catch(console.error);
         toast('✓ יובאו ' + totalAdded + ' עסקאות מ-' + files.length + ' קבצים');
       }
     };
@@ -744,11 +746,105 @@ function autoCategory(desc){desc=(desc||'').toLowerCase();if(/משכורת|שכ�
 
 function toast(msg){const e=document.getElementById('t');e.textContent=msg;e.classList.add('on');setTimeout(()=>e.classList.remove('on'),3200);}
 
+// ══════════════════════════════════════════
+// SUPABASE — חיבור לבסיס הנתונים
+// ══════════════════════════════════════════
+const SUPABASE_URL = 'https://mbgwzetikdylazciqxdx.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1iZ3d6ZXRpa2R5bGF6Y2lxeGR4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcxMDg3NTMsImV4cCI6MjA5MjY4NDc1M30.Pe9-TBMEwad6oi7XHj98JtrW3DFK_wdWnYE1k1yViZU';
+let db = null;
+let DB_READY = false;
+
+async function initSupabase() {
+  try {
+    if (SUPABASE_URL === 'YOUR_SUPABASE_URL') {
+      console.log('Supabase לא מוגדר — עובד ללא בסיס נתונים');
+      loadFromLocalStorage();
+      return;
+    }
+    db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    DB_READY = true;
+    showSyncStatus('מתחבר לבסיס הנתונים...');
+    await loadFromDB();
+    showSyncStatus('✓ מחובר ומסונכרן', 'green');
+  } catch(err) {
+    console.error('Supabase error:', err);
+    loadFromLocalStorage();
+    showSyncStatus('עובד ללא חיבור', 'orange');
+  }
+}
+
+function showSyncStatus(msg, color='var(--muted)') {
+  const el = document.getElementById('ls');
+  if (el) { el.textContent = msg; el.style.color = color === 'green' ? 'var(--olive)' : color === 'orange' ? 'var(--sand)' : 'var(--muted)'; }
+}
+
+// ── טעינה מ-Supabase ──
+async function loadFromDB() {
+  if (!DB_READY) return;
+  const { data: txData, error: txErr } = await db.from('transactions').select('*').order('created_at', { ascending: false });
+  if (!txErr && txData) {
+    TXS = txData.map(r => ({ date: r.date, desc: r.desc, cat: r.cat, src: r.src, amt: parseFloat(r.amt), tp: r.tp }));
+  }
+  const { data: recData, error: recErr } = await db.from('recurring').select('*');
+  if (!recErr && recData) {
+    RECURRING = recData.map(r => ({ name: r.name, amt: parseFloat(r.amt), day: r.day, cat: r.cat }));
+  }
+  const { data: budData, error: budErr } = await db.from('budget').select('*');
+  if (!budErr && budData) {
+    budData.forEach(r => { if (BUDGET[r.category]) BUDGET[r.category].budget = parseFloat(r.amount); });
+  }
+  refreshAll();
+  if (document.querySelector('.ni.on')) {
+    const activePage = document.querySelector('.pg.on')?.id?.replace('pg-','');
+    if (activePage === 'budget') buildBudget();
+    if (activePage === 'recurring') buildRecurring();
+  }
+}
+
+// ── שמירת עסקאות ל-Supabase ──
+async function saveTxsToDB(newTxs) {
+  if (!DB_READY || !newTxs.length) {
+    saveToLocalStorage();
+    return;
+  }
+  const rows = newTxs.map(t => ({ date: t.date, desc: t.desc, cat: t.cat, src: t.src, amt: t.amt, tp: t.tp }));
+  const { error } = await db.from('transactions').upsert(rows, { onConflict: 'date,desc,amt' });
+  if (error) { console.error('DB save error:', error); saveToLocalStorage(); }
+  else showSyncStatus('✓ נשמר בענן — ' + new Date().toLocaleTimeString('he-IL'), 'green');
+}
+
+async function saveRecurringToDB() {
+  if (!DB_READY) { localStorage.setItem('kessef_recurring', JSON.stringify(RECURRING)); return; }
+  await db.from('recurring').delete().neq('id', 0);
+  if (RECURRING.length) await db.from('recurring').insert(RECURRING.map(r => ({ name: r.name, amt: r.amt, day: r.day, cat: r.cat })));
+}
+
+async function saveBudgetToDB() {
+  if (!DB_READY) return;
+  const rows = Object.entries(BUDGET).map(([cat, { budget }]) => ({ category: cat, amount: budget }));
+  await db.from('budget').upsert(rows, { onConflict: 'category' });
+}
+
+// ── LocalStorage fallback ──
+function saveToLocalStorage() {
+  localStorage.setItem('kessef_txs', JSON.stringify(TXS));
+  localStorage.setItem('kessef_recurring', JSON.stringify(RECURRING));
+}
+
+function loadFromLocalStorage() {
+  const txs = localStorage.getItem('kessef_txs');
+  if (txs) { try { TXS = JSON.parse(txs); } catch {} }
+  const rec = localStorage.getItem('kessef_recurring');
+  if (rec) { try { RECURRING = JSON.parse(rec); } catch {} }
+  refreshAll();
+}
+
 // Init
 const h=new Date().getHours(),greet=h<12?'בוקר טוב \u2600\ufe0f':h<17?'צהריים טובים \u{1F324}':h<21?'ערב טוב \u{1F319}':'לילה טוב \u{1F319}';
 document.getElementById('dash-greeting').textContent=greet;
 buildCycleSelect('dashCycle','');
 renderDashboard();
+initSupabase();
 </script>
 </body>
 </html>
