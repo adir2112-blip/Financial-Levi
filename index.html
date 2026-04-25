@@ -202,6 +202,7 @@ table.tx td{padding:10px 17px;font-size:12.5px;vertical-align:middle}
     <div class="src-row"><div class="src-pip" style="background:#5a8fc0"></div>MAX<span class="src-ok">✓</span></div>
     <div style="margin-top:10px;font-size:11px;color:var(--faint)">עדכון: <span id="ls">—</span></div>
     <button onclick="manualSave()" style="margin-top:10px;width:100%;padding:8px;background:var(--olive);color:white;border:none;border-radius:8px;font-family:'Heebo',sans-serif;font-size:12px;font-weight:500;cursor:pointer" onmouseover="this.style.background='var(--olive-lt)'" onmouseout="this.style.background='var(--olive)'">&#128190; שמור הכל לענן</button>
+    <button onclick="resetData()" style="margin-top:6px;width:100%;padding:8px;background:var(--red-pale);color:var(--red);border:1px solid var(--red);border-radius:8px;font-family:'Heebo',sans-serif;font-size:12px;font-weight:500;cursor:pointer" onmouseover="this.style.background='var(--red)';this.style.color='white'" onmouseout="this.style.background='var(--red-pale)';this.style.color='var(--red)'">&#128465; איפוס עסקאות</button>
   </div>
 </aside>
 <main class="main">
@@ -841,8 +842,8 @@ function importExcelMulti(input) {
         if (newTxs) {
           let added = 0;
           for (const tx of newTxs) {
-            const key = tx.date+'_'+tx.desc+'_'+Math.abs(tx.amt);
-            if (!TXS.some(t=>t.date+'_'+t.desc+'_'+Math.abs(t.amt)===key)) { TXS.push(tx); added++; totalAdded++; }
+            const key = tx.date+'_'+tx.src+'_'+tx.desc+'_'+Math.round(Math.abs(tx.amt)*100);
+            if (!TXS.some(t=>t.date+'_'+t.src+'_'+t.desc+'_'+Math.round(Math.abs(t.amt)*100)===key)) { TXS.push(tx); added++; totalAdded++; }
           }
         }
       } catch(err) { console.error(file.name, err); }
@@ -877,7 +878,7 @@ function importExcel(input){
       const newTxs=isMax?parseMax(rows):isMc?parseMastercard(rows):isHap?parseHapoalim(rows):null;
       if(!newTxs){toast('\u26a0 לא זוהה פורמט');return;}
       let added=0;
-      for(const tx of newTxs){const key=tx.date+'_'+tx.src+'_'+tx.desc+'_'+Math.abs(tx.amt);if(!TXS.some(t=>t.date+'_'+t.src+'_'+t.desc+'_'+Math.abs(t.amt)===key)){TXS.push(tx);added++;}}
+      for(const tx of newTxs){const key=tx.date+'_'+tx.src+'_'+tx.desc+'_'+Math.round(Math.abs(tx.amt)*100);if(!TXS.some(t=>t.date+'_'+t.src+'_'+t.desc+'_'+Math.round(Math.abs(t.amt)*100)===key)){TXS.push(tx);added++;}}
       TXS.sort((a,b)=>{const pd=s=>{if(!s)return 0;const[d,m]=s.split('/');return parseInt(m)*100+parseInt(d);};return pd(b.date)-pd(a.date);});
       input.value='';
       const src=isMax?'MAX':isMc?'ישראכרט':'הפועלים';
@@ -1454,6 +1455,32 @@ async function manualSave(){
 function startAutoSave(){
   if(_asi)clearInterval(_asi);
   _asi=setInterval(async()=>{if(!DB_READY||!TXS.length)return;if(Date.now()-_lst>55000){await saveAllTxsToDB();_lst=Date.now();}},60000);
+}
+
+
+async function resetData(){
+  if(!confirm('מחיקת כל העסקאות?\n\nשים לב:\n✓ כללי הסיווג יישמרו\n✓ חיובים קבועים יישמרו\n✓ תקציב יישמר\n\nרק העסקאות המיובאות יימחקו.'))return;
+  // שמור כללים לפני מחיקה
+  const savedRules = JSON.parse(localStorage.getItem('kessef_cat_rules')||'[]');
+  const savedRec = JSON.parse(localStorage.getItem('kessef_recurring')||'[]');
+  // מחק עסקאות
+  TXS = [];
+  saveToLocalStorage();
+  if(DB_READY){
+    showSyncStatus('מוחק...','orange');
+    try{
+      const{error}=await db.from('transactions').delete().gte('id',0);
+      if(error) console.error(error);
+    }catch(e){console.error(e);}
+  }
+  // שחזר כללים
+  localStorage.setItem('kessef_cat_rules', JSON.stringify(savedRules));
+  localStorage.setItem('kessef_recurring', JSON.stringify(savedRec));
+  CAT_RULES = savedRules;
+  RECURRING = savedRec;
+  refreshAll();
+  showSyncStatus('✓ אופס בהצלחה','green');
+  toast('✓ העסקאות נמחקו — כללי הסיווג נשמרו');
 }
 
 function toast(msg){const e=document.getElementById('t');e.textContent=msg;e.classList.add('on');setTimeout(()=>e.classList.remove('on'),3200);}
