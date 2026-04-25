@@ -366,6 +366,26 @@ table.tx td{padding:10px 17px;font-size:12.5px;vertical-align:middle}
     <div class="mact"><button class="mcanc" onclick="closeRecurringAdd()">ביטול</button><button class="msave" onclick="saveRecurring()">הוסף</button></div>
   </div>
 </div>
+
+<!-- ✅ Modal עריכת קטגוריה + החלפה המונית -->
+<div class="ov" id="ov-editcat" onclick="if(event.target.id==='ov-editcat')closeEditCat()">
+  <div class="modal" style="width:400px">
+    <div class="mtitle" id="editcat-title">שינוי קטגוריה</div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:14px;line-height:1.5" id="editcat-desc"></div>
+    <div class="fg">
+      <label class="fl">קטגוריה חדשה</label>
+      <select class="fse" id="editcat-select" style="font-size:15px"></select>
+    </div>
+    <div style="background:var(--olive-pale);border:1px solid var(--olive-mid);border-radius:10px;padding:12px 14px;margin-bottom:4px;font-size:12.5px;color:var(--olive);line-height:1.7">
+      ✓ כל העסקאות עם אותו שם יוחלפו אוטומטית<br>
+      ✓ חיובים עתידיים יסווגו כך לבד
+    </div>
+    <div class="mact">
+      <button class="mcanc" onclick="closeEditCat()">ביטול</button>
+      <button class="msave" onclick="applyEditCat()">החל על הכל</button>
+    </div>
+  </div>
+</div>
 <div class="toast" id="t"></div>
 
 <!-- Modal קטגוריה חדשה -->
@@ -660,20 +680,26 @@ function rrows(data){
   const totalInc=data.filter(t=>t.tp==='income').reduce((s,t)=>s+t.amt,0);
   const totalExp=data.filter(t=>t.tp==='expense').reduce((s,t)=>s+Math.abs(t.amt),0);
   const net=totalInc-totalExp;
-  const hasInc=totalInc>0, hasExp=totalExp>0;
-  const summaryRow=`<tr style="background:var(--cream2);border-top:2px solid var(--border2)">
-    <td colspan="3" style="padding:10px 17px;font-size:12px;color:var(--muted);font-weight:600">
-      סה"כ — ${data.length} עסקאות
-      ${hasInc&&hasExp?`<span style="margin-right:10px;color:var(--olive)">הכנסות: ${fmt(totalInc)}</span><span style="color:var(--red)">הוצאות: ${fmt(totalExp)}</span>`:''}
-    </td>
-    <td style="padding:10px 17px"></td>
-    <td class="ta ${net>=0?'cr':'dr'}" style="padding:10px 17px;font-size:14px;font-weight:700">
-      ${hasInc&&hasExp?(net>=0?'+':'−')+'₪'+Math.abs(net).toLocaleString():hasInc?fmt(totalInc):'−₪'+totalExp.toLocaleString()}
-    </td>
-  </tr>`;
-  return'<thead><tr><th>תאריך</th><th>תיאור</th><th>קטגוריה</th><th>מקור</th><th style="text-align:left">סכום</th></tr></thead><tbody>'+
-  data.map(t=>'<tr><td class="tdate">'+t.date+'</td><td class="td">'+t.desc+'</td><td><span class="tc">'+t.cat+'</span></td><td class="ts-src" style="color:'+sc(t.src)+'">'+sl(t.src)+'</td><td class="ta '+(t.tp==='income'?'cr':'−dr'[1]+'dr')+'">'+(t.tp==='income'?'+':'−')+'₪'+Math.abs(t.amt).toLocaleString()+'</td></tr>').join('')+
-  summaryRow+'</tbody>';
+  const hasInc=totalInc>0,hasExp=totalExp>0;
+  const summaryRow='<tr style="background:var(--cream2);border-top:2px solid var(--border2)">'
+    +'<td colspan="3" style="padding:10px 17px;font-size:12px;color:var(--muted);font-weight:600">סה\"כ — '+data.length+' עסקאות'
+    +(hasInc&&hasExp?' <span style="color:var(--olive)">הכנסות: '+fmt(totalInc)+'</span> <span style="color:var(--red)">הוצאות: '+fmt(totalExp)+'</span>':'')
+    +'</td><td style="padding:10px 17px"></td>'
+    +'<td class="ta '+(net>=0?'cr':'dr')+'" style="padding:10px 17px;font-size:14px;font-weight:700">'
+    +(hasInc&&hasExp?(net>=0?'+':'−')+'₪'+Math.abs(net).toLocaleString():hasInc?fmt(totalInc):'−₪'+totalExp.toLocaleString())
+    +'</td></tr>';
+  window._rrowsData=data;
+  const rows=data.map((t,i)=>{
+    const safe=t.desc.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    return '<tr style="cursor:pointer" onclick="openEditCatRow('+i+')">'
+      +'<td class="tdate">'+t.date+'</td>'
+      +'<td class="td">'+safe+'</td>'
+      +'<td><span class="tc" onmouseover="this.style.background=\'var(--olive-pale)\';this.style.color=\'var(--olive)\'" onmouseout="this.style.background=\'\';this.style.color=\'\'" style="cursor:pointer">'+t.cat+'</span></td>'
+      +'<td class="ts-src" style="color:'+sc(t.src)+'">'+sl(t.src)+'</td>'
+      +'<td class="ta '+(t.tp==='income'?'cr':'dr')+'">'+(t.tp==='income'?'+':'−')+'₪'+Math.abs(t.amt).toLocaleString()+'</td>'
+      +'</tr>';
+  }).join('');
+  return'<thead><tr><th>תאריך</th><th>תיאור</th><th>קטגוריה <span style="font-size:9px;opacity:.5">(לחץ לשינוי)</span></th><th>מקור</th><th style="text-align:left">סכום</th></tr></thead><tbody>'+rows+summaryRow+'</tbody>';
 }
 
 function setTxCycle(key){activeTxCycle=key;renderTxTable();}
@@ -1311,6 +1337,45 @@ function deleteRuleFromPage(i){
   toast('✓ כלל הוסר');
 }
 
+
+// ✅ עריכת קטגוריה בלחיצה על שורה
+let _editCatIdx=-1, _editCatKeyword='';
+
+function openEditCatRow(rowIdx){
+  const data=window._rrowsData;
+  if(!data||rowIdx<0||rowIdx>=data.length)return;
+  const t=data[rowIdx];
+  _editCatIdx=TXS.indexOf(t);
+  _editCatKeyword=t.desc.split(' — ')[0].split(' - ')[0].trim().toLowerCase();
+  document.getElementById('editcat-title').textContent='שינוי קטגוריה';
+  document.getElementById('editcat-desc').textContent='📌 '+t.desc;
+  const allCats=Object.keys(BUDGET);
+  document.getElementById('editcat-select').innerHTML=allCats.map(c=>'<option value="'+c+'"'+(c===t.cat?' selected':'')+'>'+c+'</option>').join('');
+  document.getElementById('ov-editcat').classList.add('open');
+}
+
+function closeEditCat(){document.getElementById('ov-editcat').classList.remove('open');}
+
+function applyEditCat(){
+  const newCat=document.getElementById('editcat-select').value;
+  const keyword=_editCatKeyword;
+  let count=0;
+  // החלף בכל העסקאות עם אותו שם
+  TXS.forEach(t=>{
+    const txKey=t.desc.split(' — ')[0].split(' - ')[0].trim().toLowerCase();
+    if(txKey===keyword){t.cat=newCat;count++;}
+  });
+  // הוסף/עדכן כלל סיווג אוטומטי
+  const existIdx=CAT_RULES.findIndex(r=>r.keyword===keyword);
+  if(existIdx>=0)CAT_RULES[existIdx].cat=newCat;
+  else CAT_RULES.unshift({keyword,cat:newCat});
+  saveCatRules();
+  saveAllTxsToDB().catch(console.error);
+  closeEditCat();
+  renderTxTable();refreshAll();
+  toast('✓ עודכנו '+count+' עסקאות + כלל אוטומטי נשמר');
+}
+
 function toast(msg){const e=document.getElementById('t');e.textContent=msg;e.classList.add('on');setTimeout(()=>e.classList.remove('on'),3200);}
 
 // ══════════════════════════════════════════
@@ -1393,9 +1458,19 @@ async function saveAllTxsToDB() {
 }
 
 async function saveRecurringToDB() {
-  if (!DB_READY) { localStorage.setItem('kessef_recurring', JSON.stringify(RECURRING)); return; }
-  await db.from('recurring').delete().neq('id', 0);
-  if (RECURRING.length) await db.from('recurring').insert(RECURRING.map(r => ({ name: r.name, amt: r.amt, day: r.day, cat: r.cat })));
+  localStorage.setItem('kessef_recurring', JSON.stringify(RECURRING));
+  if (!DB_READY) return;
+  try {
+    const { error: delErr } = await db.from('recurring').delete().gte('id', 0);
+    if (delErr) { console.error('recurring delete:', delErr); return; }
+    if (RECURRING.length) {
+      const { error: insErr } = await db.from('recurring').insert(
+        RECURRING.map(r => ({ name: r.name, amt: r.amt, day: r.day, cat: r.cat }))
+      );
+      if (insErr) console.error('recurring insert:', insErr);
+      else showSyncStatus('✓ חיובים קבועים נשמרו', 'green');
+    }
+  } catch(e) { console.error('saveRecurringToDB:', e); }
 }
 
 async function saveBudgetToDB() {
