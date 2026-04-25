@@ -877,7 +877,7 @@ function importExcel(input){
       const newTxs=isMax?parseMax(rows):isMc?parseMastercard(rows):isHap?parseHapoalim(rows):null;
       if(!newTxs){toast('\u26a0 לא זוהה פורמט');return;}
       let added=0;
-      for(const tx of newTxs){const key=tx.date+'_'+tx.desc+'_'+Math.abs(tx.amt);if(!TXS.some(t=>t.date+'_'+t.desc+'_'+Math.abs(t.amt)===key)){TXS.push(tx);added++;}}
+      for(const tx of newTxs){const key=tx.date+'_'+tx.src+'_'+tx.desc+'_'+Math.abs(tx.amt);if(!TXS.some(t=>t.date+'_'+t.src+'_'+t.desc+'_'+Math.abs(t.amt)===key)){TXS.push(tx);added++;}}
       TXS.sort((a,b)=>{const pd=s=>{if(!s)return 0;const[d,m]=s.split('/');return parseInt(m)*100+parseInt(d);};return pd(b.date)-pd(a.date);});
       input.value='';
       const src=isMax?'MAX':isMc?'ישראכרט':'הפועלים';
@@ -1060,23 +1060,22 @@ function openTxPopup(type) {
   document.getElementById('txpopup-title').textContent = title;
   document.getElementById('txpopup-title').style.color = color;
 
-  document.getElementById('txpopup-summary').innerHTML = `
-    <div><div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:3px">סה"כ</div>
-    <div style="font-family:'Playfair Display',serif;font-size:20px;color:${color}">${fmt(total)}</div></div>
-    <div><div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:3px">מספר עסקאות</div>
-    <div style="font-family:'Playfair Display',serif;font-size:20px">${txs.length}</div></div>
-    ${topCat ? `<div><div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:3px">קטגוריה עיקרית</div>
-    <div style="font-size:14px;font-weight:600">${topCat[0]}</div>
-    <div style="font-size:12px;color:var(--muted)">${fmt(topCat[1])}</div></div>` : ''}
-    <div style="margin-right:auto;text-align:left">
-      <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px">לפי קטגוריה</div>
-      ${Object.entries(bycat).sort((a,b)=>b[1]-a[1]).slice(0,4).map(([c,v])=>
-        `<div style="display:flex;justify-content:space-between;gap:24px;font-size:12px;margin-bottom:2px">
-          <span style="color:var(--muted)">${c}</span><span style="font-weight:500">${fmt(v)}</span>
-        </div>`).join('')}
-    </div>`;
+    const isrAmt=txs.filter(t=>t.src==='isracard').reduce((s,t)=>s+Math.abs(t.amt),0);
+  const maxAmt=txs.filter(t=>t.src==='max').reduce((s,t)=>s+Math.abs(t.amt),0);
+  const recAmt=(type==='expense')?RECURRING.reduce((s,r)=>s+r.amt,0):0;
+  document.getElementById('txpopup-summary').innerHTML=
+    '<div><div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:3px">סה"כ כולל</div>'
+    +'<div style="font-family:\'Playfair Display\',serif;font-size:20px;color:'+color+'">'+fmt(total)+'</div></div>'
+    +(type==='expense'?
+      '<div><div style="font-size:10px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px">פירוט לפי מקור</div>'
+      +(isrAmt>0?'<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--border)"><span style="color:#c8a84b;font-weight:600;font-size:13px">&#9679; ישראכרט</span><span style="font-family:\'Playfair Display\',serif;font-size:16px;font-weight:500">'+fmt(isrAmt)+'</span></div>':'')
+      +(maxAmt>0?'<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--border)"><span style="color:#5a8fc0;font-weight:600;font-size:13px">&#9679; MAX</span><span style="font-family:\'Playfair Display\',serif;font-size:16px;font-weight:500">'+fmt(maxAmt)+'</span></div>':'')
+      +(recAmt>0?'<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0"><span style="color:var(--sand);font-weight:600;font-size:13px">&#9679; קבועים</span><span style="font-family:\'Playfair Display\',serif;font-size:16px;font-weight:500">'+fmt(recAmt)+'</span></div>':'')
+      +'<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;margin-top:4px;border-top:2px solid var(--border2)"><span style="font-weight:600;font-size:12px">סה"כ</span><span style="font-family:\'Playfair Display\',serif;font-size:17px;color:var(--red);font-weight:500">'+fmt(total)+'</span></div>'
+      +'</div>'
+    :'<div><div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:3px">מספר עסקאות</div><div style="font-family:\'Playfair Display\',serif;font-size:20px">'+txs.length+'</div></div>')
+    +(topCat?'<div><div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.8px;margin-bottom:3px">קטגוריה עיקרית</div><div style="font-size:14px;font-weight:600">'+topCat[0]+'</div><div style="font-size:12px;color:var(--muted)">'+fmt(topCat[1])+'</div></div>':'');
 
-  // שמור type לצורך מיון עתידי
   document.getElementById('txpopup-title').dataset.type = type;
   renderPopupTable(txs, type === 'expense');
   document.getElementById('ov-txpopup').classList.add('open');
