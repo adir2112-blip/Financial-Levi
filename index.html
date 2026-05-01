@@ -1007,23 +1007,31 @@ function parseMastercard(rows){
 
 
 function parseMax(rows){
-  // עמודה A (idx 0) = תאריך עסקה, עמודה B (idx 1) = שם בית העסק, עמודה C (idx 2) = קטגוריה, עמודה F (idx 5) = סכום חיוב
+  // עמודה A (idx 0) = תאריך עסקה, עמודה B (idx 1) = שם בית העסק
+  // עמודה C (idx 2) = קטגוריה, עמודה F (idx 5) = סכום חיוב
+  // עמודה J (idx 9) = תאריך חיוב ← זה התאריך שבו הכסף יורד! 
   const txs=[];
   const hi=rows.findIndex(r=>r&&r.some(c=>String(c||'').includes('שם בית העסק')));
   if(hi===-1)return txs;
+  // מצא עמודת תאריך חיוב
+  const h=rows[hi];
+  const iChargeDate=h.findIndex(c=>String(c||'').includes('תאריך חיוב'));
   for(let i=hi+1;i<rows.length;i++){
     const r=rows[i];
-    if(!r||!r[1])continue;                     // עמודה B = שם בית העסק
+    if(!r||!r[1])continue;
     const desc=String(r[1]||'').trim();
-    const amt=parseFloat(r[5])||0;             // עמודה F = סכום חיוב
+    const amt=parseFloat(r[5])||0;
     if(!desc||!amt)continue;
-    const date=xlDate(r[0]);                   // עמודה A = תאריך עסקה
-    const catRaw=String(r[2]||'').trim();      // עמודה C = קטגוריה
+    // השתמש בתאריך חיוב (עמודה J) — שמייצג מתי הכסף ירד בפועל
+    const chargeDate=iChargeDate>=0&&r[iChargeDate]?xlDate(r[iChargeDate]):null;
+    const txDate=iChargeDate>=0&&r[iChargeDate]?xlDate(r[iChargeDate]):xlDate(r[0]);
+    const catRaw=String(r[2]||'').trim();
     const cat=catRaw?mapMaxCat(catRaw):autoCategory(desc);
-    txs.push({date,desc,cat,src:'max',amt:-Math.abs(amt),tp:'expense'});
+    txs.push({date:txDate,desc,cat,src:'max',amt:-Math.abs(amt),tp:'expense'});
   }
   return txs;
 }
+
 
 function mapMaxCat(c){if(c.includes('מזון')||c.includes('מסעדות')||c.includes('קפה'))return'מזון ומסעדות';if(c.includes('אופנה'))return'קניות';if(c.includes('עירייה')||c.includes('ממשלה'))return'חשבונות';if(c.includes('דלק')||c.includes('תחבורה'))return'תחבורה';if(c.includes('בריאות')||c.includes('רפואה'))return'בריאות';if(c.includes('בידור')||c.includes('תרבות'))return'בידור';return'אחר';}
 
