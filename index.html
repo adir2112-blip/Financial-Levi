@@ -1976,9 +1976,16 @@ async function saveTxsToDB(newTxs) {
   } catch(e) { console.error(e); }
 }
 
+// מוחק הכל ואז מכניס הכל מחדש — אם שתי קריאות רצות בו-זמנית (למשל שמירה
+// אוטומטית כל 60 שניות שמתנגשת עם שמירה שהופעלה מייבוא/סיווג), שתיהן היו
+// עלולות למחוק ואז להכניס את כל TXS בנפרד, וכך כל עסקה מוכפלת. הנעילה כאן
+// מוודאת שרק ריצה אחת של מחיקה+הכנסה קורית בכל רגע נתון.
+let _savingTxs=false,_savePending=false;
 async function saveAllTxsToDB(){
   saveToLocalStorage();
   if(!DB_READY||!TXS.length)return;
+  if(_savingTxs){_savePending=true;return;}
+  _savingTxs=true;
   try{
     showSyncStatus('שומר...','orange');
     const{error:d}=await db.from('transactions').delete().gte('id',0);
@@ -1990,6 +1997,10 @@ async function saveAllTxsToDB(){
     }
     showSyncStatus('✓ '+TXS.length+' עסקאות נשמרו','green');
   }catch(e){console.error(e);}
+  finally{
+    _savingTxs=false;
+    if(_savePending){_savePending=false;saveAllTxsToDB();}
+  }
 }
 
 
