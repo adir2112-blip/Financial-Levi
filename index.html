@@ -305,6 +305,10 @@ table.tx td{padding:10px 17px;font-size:12.5px;vertical-align:middle}
     <button class="btn-p" onclick="openBudgetEdit()"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>ערוך תקציב</button>
   </div>
   <div class="rec-total" id="budget-summary"></div>
+  <div class="card" style="margin-bottom:16px">
+    <div class="ch"><div class="ct">הוצאה מול יעד — לפי קטגוריה</div></div>
+    <div style="position:relative;height:260px"><canvas id="budget-chart"></canvas></div>
+  </div>
   <div class="bgrid" id="bg"></div>
 </div>
 <!-- RECURRING -->
@@ -492,6 +496,16 @@ table.tx td{padding:10px 17px;font-size:12.5px;vertical-align:middle}
       <button class="mcanc" onclick="closeInterimEdit()">ביטול</button>
       <button class="msave" onclick="saveInterim()">שמור</button>
     </div>
+  </div>
+</div>
+
+<!-- פופ-אפ תשלומים שמסתיימים החודש -->
+<div class="ov" id="ov-ending-inst" onclick="if(event.target.id==='ov-ending-inst')closeEndingInstallments()">
+  <div class="modal" style="width:440px;max-height:80vh;overflow-y:auto">
+    <div class="mtitle">🎉 תשלומים שמסתיימים החודש</div>
+    <div style="font-size:12.5px;color:var(--muted);margin-bottom:14px" id="ending-inst-sub"></div>
+    <div id="ending-inst-list"></div>
+    <div class="mact"><button class="msave" onclick="closeEndingInstallments()">הבנתי</button></div>
   </div>
 </div>
 
@@ -791,20 +805,60 @@ function buildBudget(){
   const txs=txsInCycle(key);
   const totalB=Object.values(BUDGET).reduce((s,b)=>s+b.budget,0);
   const totalS=txs.filter(t=>t.tp==='expense').reduce((s,t)=>s+Math.abs(t.amt),0);
-  document.getElementById('budget-summary').innerHTML='<div style="display:flex;gap:20px;align-items:center;flex:1"><div><div style="font-size:10px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.8px;margin-bottom:3px">סה"כ תקציב</div><div style="font-family:\'Playfair Display\',serif;font-size:21px">'+fmt(totalB)+'</div></div><div><div style="font-size:10px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.8px;margin-bottom:3px">הוצא</div><div style="font-family:\'Playfair Display\',serif;font-size:21px;color:var(--red)">'+fmt(totalS)+'</div></div><div><div style="font-size:10px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.8px;margin-bottom:3px">נותר</div><div style="font-family:\'Playfair Display\',serif;font-size:21px;color:'+(totalB-totalS>=0?'var(--olive)':'var(--red)')+'">'+fmt(totalB-totalS)+'</div></div></div>';
-  document.getElementById('bg').innerHTML=Object.entries(BUDGET).map(([name,{ico,budget}],i)=>{
+  document.getElementById('budget-summary').innerHTML='<div style="display:flex;gap:20px;align-items:center;flex:1"><div><div style="font-size:10px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.8px;margin-bottom:3px">סה"כ תקציב</div><div style="font-family:'Playfair Display',serif;font-size:21px">'+fmt(totalB)+'</div></div><div><div style="font-size:10px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.8px;margin-bottom:3px">הוצא</div><div style="font-family:'Playfair Display',serif;font-size:21px;color:var(--red)">'+fmt(totalS)+'</div></div><div><div style="font-size:10px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.8px;margin-bottom:3px">נותר</div><div style="font-family:'Playfair Display',serif;font-size:21px;color:'+(totalB-totalS>=0?'var(--olive)':'var(--red)')+'">'+fmt(totalB-totalS)+'</div></div><div><div style="font-size:10px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.8px;margin-bottom:3px">אחוז עמידה כללי</div><div style="font-family:'Playfair Display',serif;font-size:21px;color:'+(totalB>0&&totalS/totalB>1?'var(--red)':'var(--olive)')+'">'+(totalB>0?Math.round(totalS/totalB*100):0)+'%</div></div></div>';
+  const cats=Object.entries(BUDGET);
+  document.getElementById('bg').innerHTML=cats.map(([name,{ico,budget}],i)=>{
     const spent=txs.filter(t=>t.tp==='expense'&&t.cat===name).reduce((s,t)=>s+Math.abs(t.amt),0);
     const pct=budget>0?Math.min(100,Math.round(spent/budget*100)):0,over=spent>budget;
-    return'<div class="bc"><div class="bico">'+ico+'</div><div class="bname">'+name+'</div><div class="bamts">'+fmt(spent)+' מתוך '+fmt(budget)+' \u2014 '+pct+'%</div><div class="pt"><div class="pf" style="width:'+pct+'%;background:'+(over?'var(--red)':CC[i%CC.length])+'"></div></div><div class="brem" style="color:'+(over?'var(--red)':'var(--olive)')+'">'+( over?'\u26a0 חריגה של '+fmt(spent-budget):'נותר '+fmt(budget-spent))+'</div><span class="bedit" onclick="openBudgetEdit()">✎ ערוך יעד</span></div>';
+    return'<div class="bc"><div class="bico">'+ico+'</div><div class="bname">'+name+'</div><div class="bamts">'+fmt(spent)+' מתוך '+fmt(budget)+' — '+pct+'%</div><div class="pt"><div class="pf" style="width:'+pct+'%;background:'+(over?'var(--red)':CC[i%CC.length])+'"></div></div><div class="brem" style="color:'+(over?'var(--red)':'var(--olive)')+'">'+( over?'⚠ חריגה של '+fmt(spent-budget):'נותר '+fmt(budget-spent))+'</div><span class="bedit" onclick="openBudgetEdit()">✎ ערוך יעד</span></div>';
   }).join('');
+  const canvas=document.getElementById('budget-chart');
+  if(canvas){
+    const ctx=canvas.getContext('2d');
+    if(window._budgetChart){window._budgetChart.destroy();}
+    const spentArr=cats.map(([name])=>txs.filter(t=>t.tp==='expense'&&t.cat===name).reduce((s,t)=>s+Math.abs(t.amt),0));
+    const budgetArr=cats.map(([,b])=>b.budget);
+    window._budgetChart=new Chart(ctx,{
+      type:'bar',
+      data:{
+        labels:cats.map(([name])=>name),
+        datasets:[
+          {label:'הוצא בפועל',data:spentArr.map(v=>Math.round(v)),backgroundColor:spentArr.map((v,i)=>v>budgetArr[i]&&budgetArr[i]>0?'#c0392b':CC[i%CC.length]),borderRadius:5},
+          {label:'יעד',data:budgetArr.map(v=>Math.round(v)),backgroundColor:'rgba(26,26,24,.08)',borderRadius:5}
+        ]
+      },
+      options:{
+        responsive:true,maintainAspectRatio:false,
+        plugins:{legend:{position:'bottom',labels:{boxWidth:10,font:{size:11}}}},
+        scales:{y:{beginAtZero:true,ticks:{font:{size:10}}},x:{ticks:{font:{size:10}}}},
+        animation:{duration:500}
+      }
+    });
+  }
 }
 
 function openBudgetEdit(){
-  document.getElementById('budget-edit-fields').innerHTML=Object.entries(BUDGET).map(([name,{ico,budget}])=>'<div class="fg" style="display:grid;grid-template-columns:1fr 110px;gap:8px;align-items:center"><label style="font-size:13px;font-weight:500">'+ico+' '+name+'</label><input class="fi" type="number" id="bedit-'+name.replace(/\s/g,'_')+'" value="'+budget+'" placeholder="0"></div>').join('');
+  document.getElementById('budget-edit-fields').innerHTML=Object.entries(BUDGET).map(([name,{ico,budget,alertPct}])=>
+    '<div class="fg" style="display:grid;grid-template-columns:1fr 90px 80px;gap:8px;align-items:center">'+
+    '<label style="font-size:13px;font-weight:500">'+ico+' '+name+'</label>'+
+    '<input class="fi" type="number" id="bedit-'+name.replace(/s/g,'_')+'" value="'+budget+'" placeholder="יעד ₪">'+
+    '<input class="fi" type="number" id="balert-'+name.replace(/s/g,'_')+'" value="'+(alertPct!==undefined?alertPct:80)+'" placeholder="80%" title="אחוז להתראת וואטסאפ">'+
+    '</div>').join('')+
+    '<div style="font-size:11px;color:var(--faint);margin-top:2px">העמודה הימנית = יעד חודשי (₪). העמודה השמאלית = אחוז ממנו שישלח התראת וואטסאפ כשעוברים אותו.</div>';
   document.getElementById('ov-budget').classList.add('open');
 }
 function closeBudgetEdit(){document.getElementById('ov-budget').classList.remove('open');}
-function saveBudget(){Object.keys(BUDGET).forEach(name=>{const el=document.getElementById('bedit-'+name.replace(/\s/g,'_'));if(el)BUDGET[name].budget=parseFloat(el.value)||0;});closeBudgetEdit();buildBudget();toast('\u2713 התקציב עודכן');}
+function saveBudget(){
+  Object.keys(BUDGET).forEach(name=>{
+    const key=name.replace(/s/g,'_');
+    const bEl=document.getElementById('bedit-'+key);
+    const aEl=document.getElementById('balert-'+key);
+    if(bEl)BUDGET[name].budget=parseFloat(bEl.value)||0;
+    if(aEl)BUDGET[name].alertPct=Math.max(1,Math.min(200,parseFloat(aEl.value)||80));
+  });
+  saveBudgetFull();
+  closeBudgetEdit();buildBudget();toast('✓ התקציב ואחוזי ההתראה עודכנו');
+}
 
 function buildRecurring(){
   const total=RECURRING.reduce((s,r)=>s+r.amt,0);
@@ -982,6 +1036,7 @@ function importExcelMulti(input) {
   if (!files.length) return;
   toast('קורא ' + files.length + ' קבצים...');
   let processed = 0, totalAdded = 0;
+  const allParsedTxs = []; // כל מה שנפרס בייבוא הזה, גם אם כבר קיים (לצורך זיהוי תשלומים מסתיימים)
   files.forEach(file => {
     const reader = new FileReader();
     reader.onload = function(e) {
@@ -995,6 +1050,7 @@ function importExcelMulti(input) {
         const isHap = allText.some(c=>c.includes('הפעולה')) && allText.some(c=>c.includes('חובה'));
         const newTxs = isMax ? parseMax(rows) : isMc ? parseMastercard(rows) : isHap ? parseHapoalim(rows) : null;
         if (newTxs) {
+          allParsedTxs.push(...newTxs);
           let added = 0;
           for (const tx of newTxs) {
             const key = tx.date+'_'+tx.src+'_'+tx.desc+'_'+Math.round(Math.abs(tx.amt)*100);
@@ -1012,11 +1068,54 @@ function importExcelMulti(input) {
         const newBal=localStorage.getItem('kessef_balance');
         if(newBal){document.getElementById('s-balance').textContent=fmt(parseFloat(newBal));document.getElementById('s-balance-d').textContent='מעו"ש הפועלים';}
         toast('✓ יובאו ' + totalAdded + ' עסקאות מ-' + files.length + ' קבצים');
+        const ending = detectEndingInstallments(allParsedTxs);
+        if (ending.length) showEndingInstallments(ending);
       }
     };
     reader.readAsArrayBuffer(file);
   });
 }
+
+// ══════════════════════════════════════════
+// זיהוי תשלומים שמסתיימים החודש (התשלום האחרון שלהם) — כדי לדעת כמה תקציב
+// מתפנה לחודש הבא. MAX נותן "תשלום X מתוך Y" ישירות בהערות; מסטרקארד לא
+// נותן X ישירות, אז מעריכים כמה תשלומים כבר ראינו לאותה אסמכתא בהיסטוריה.
+// ══════════════════════════════════════════
+function detectEndingInstallments(newTxs){
+  const ending=[],seen=new Set();
+  for(const t of newTxs){
+    if(t.src==='max'&&t.instCur&&t.instTotal){
+      if(t.instCur>=t.instTotal){
+        const key='max|'+t.desc+'|'+Math.round(Math.abs(t.amt)*100);
+        if(!seen.has(key)){seen.add(key);ending.push({desc:t.desc,amt:Math.abs(t.amt),src:t.src,cur:t.instCur,total:t.instTotal});}
+      }
+    } else if(t.src==='isracard'&&t.ref&&t.instTotal){
+      const occurrences=TXS.filter(x=>x.src==='isracard'&&x.ref===t.ref).length;
+      if(occurrences>=t.instTotal){
+        const key='isracard|'+t.ref;
+        if(!seen.has(key)){seen.add(key);ending.push({desc:t.desc,amt:Math.abs(t.amt),src:t.src,cur:occurrences,total:t.instTotal});}
+      }
+    }
+  }
+  return ending;
+}
+function showEndingInstallments(ending){
+  const total=ending.reduce((s,e)=>s+e.amt,0);
+  const el=document.getElementById('ending-inst-list');
+  if(el){
+    el.innerHTML=ending.map(e=>
+      '<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--border);font-size:13px">'+
+      '<span>'+e.desc+' <span style="color:var(--muted);font-size:11px">('+sl(e.src)+' · תשלום '+e.cur+' מתוך '+e.total+')</span></span>'+
+      '<strong style="color:var(--olive)">'+fmt(e.amt)+'</strong>'+
+      '</div>'
+    ).join('');
+  }
+  const subEl=document.getElementById('ending-inst-sub');
+  if(subEl)subEl.textContent='מסתיימים החודש — לא יופיעו בחיוב הבא. סה"כ מתפנה: '+fmt(total);
+  const ov=document.getElementById('ov-ending-inst');
+  if(ov)ov.classList.add('open');
+}
+function closeEndingInstallments(){const ov=document.getElementById('ov-ending-inst');if(ov)ov.classList.remove('open');}
 
 function importExcel(input){
   const file=input.files[0];if(!file)return;toast('קורא את הקובץ...');
@@ -1145,6 +1244,9 @@ function parseMastercard(rows){
     const ic=h.findIndex(c=>String(c||'').includes('חיוב לתאריך'));
     const id2=h.findIndex(c=>String(c||'').includes('שם בית עסק'));
     const ia=h.findIndex(c=>String(c||'').includes('סכום חיוב בש'));
+    const iType=h.findIndex(c=>String(c||'').includes('תאור סוג עסקת'));
+    const iPurchase=h.findIndex(c=>String(c||'').includes('סכום קנייה'));
+    const iRef=h.findIndex(c=>String(c||'').trim()==='אסמכתא');
     if(id2===-1||ia===-1)continue;
     for(let i=hi+1;i<rows.length;i++){
       const r=rows[i];if(!r||!r[0])break;
@@ -1152,9 +1254,19 @@ function parseMastercard(rows){
       const desc=String(r[id2]||'').trim(),amt=parseFloat(r[ia])||0;
       if(!desc||!amt)continue;
       const dt=(ic>=0&&r[ic])?xlDate(r[ic]):xlDate(r[2]);
-      const tt=String(r[h.length-1]||'').trim();
-      const lbl=tt.includes('תשלומים')?desc+' (תשלום)':desc;
-      txs.push({date:dt,desc:lbl,cat:autoCategory(desc),src:'isracard',amt:-Math.abs(amt),tp:'expense'});
+      const tt=iType>=0?String(r[iType]||'').trim():'';
+      const isInstallment=tt.includes('תשלומים');
+      const lbl=isInstallment?desc+' (תשלום)':desc;
+      const tx={date:dt,desc:lbl,cat:autoCategory(desc),src:'isracard',amt:-Math.abs(amt),tp:'expense'};
+      // עסקת תשלומים: שומרים אסמכתא (מזהה קבוע לכל התשלומים של אותה רכישה) וסך
+      // התשלומים המוערך (סכום קנייה מקורי חלקי סכום החיוב החודשי) — משמש לזיהוי
+      // "זה התשלום האחרון" בהמשך (ראו detectEndingInstallments)
+      if(isInstallment&&iRef>=0&&r[iRef]){
+        tx.ref=String(r[iRef]).trim();
+        const purchaseAmt=iPurchase>=0?parseFloat(String(r[iPurchase]).replace(/,/g,''))||0:0;
+        if(purchaseAmt>0)tx.instTotal=Math.max(1,Math.round(purchaseAmt/amt));
+      }
+      txs.push(tx);
     }
   }
   return txs;
@@ -1178,9 +1290,10 @@ function parseMax(rows){
   const txs=[];
   const hi=rows.findIndex(r=>r&&r.some(c=>String(c||'').includes('שם בית העסק')));
   if(hi===-1)return txs;
-  // מצא עמודת תאריך חיוב
+  // מצא עמודת תאריך חיוב + עמודת הערות (שם MAX כותב "תשלום X מתוך Y")
   const h=rows[hi];
   const iChargeDate=h.findIndex(c=>String(c||'').includes('תאריך חיוב'));
+  const iNote=h.findIndex(c=>String(c||'').includes('הערות'));
   for(let i=hi+1;i<rows.length;i++){
     const r=rows[i];
     if(!r||!r[1])continue;
@@ -1191,7 +1304,12 @@ function parseMax(rows){
     const txDate=iChargeDate>=0&&r[iChargeDate]?adjMaxChargeDate(r[iChargeDate]):xlDate(r[0]);
     const catRaw=String(r[2]||'').trim();
     const cat=resolveMaxCat(desc,catRaw);
-    txs.push({date:txDate,desc,cat,src:'max',amt:-Math.abs(amt),tp:'expense'});
+    const tx={date:txDate,desc,cat,src:'max',amt:-Math.abs(amt),tp:'expense'};
+    if(iNote>=0&&r[iNote]){
+      const m=String(r[iNote]).match(/תשלום\s+(\d+)\s+מתוך\s+(\d+)/);
+      if(m){tx.instCur=parseInt(m[1],10);tx.instTotal=parseInt(m[2],10);}
+    }
+    txs.push(tx);
   }
   return txs;
 }
