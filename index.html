@@ -1870,22 +1870,25 @@ async function initSupabase() {
       return;
     }
     db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    // DB_READY = "יש לקוח Supabase מוגדר", לא "הטעינה הראשונית הצליחה".
+    // כשל בטעינה הראשונית (הפסקת רשת רגעית וכו') לא אמור לחסום לצמיתות
+    // ניסיונות שמירה עתידיים במשך כל שאר ה-session — זה בדיוק הבאג שהיה כאן
+    // קודם: DB_READY=false על כשל טעינה גרם לכל saveX() הבא לדלג בשקט.
     DB_READY = true;
     showSyncStatus('מתחבר לבסיס הנתונים...');
     const ok = await loadFromDB();
     if (ok) {
       showSyncStatus('✓ מחובר ומסונכרן', 'green');
     } else {
-      // אין חיבור אמיתי לענן (פרויקט לא זמין/כתובת שגויה) — אל תציג "מחובר" באופן מטעה
-      DB_READY = false;
+      // הטעינה הראשונית נכשלה — נטען גיבוי מקומי להצגה כרגע, אבל DB_READY
+      // נשאר true כדי ששמירות עתידיות עדיין ינסו בפועל להגיע לענן
       loadFromLocalStorage();
-      showSyncStatus('⚠ אין חיבור לענן — עובד מזיכרון מקומי', 'orange');
+      showSyncStatus('⚠ טעינה ראשונית נכשלה — ננסה שוב בשמירה הבאה', 'orange');
     }
   } catch(err) {
     console.error('Supabase error:', err);
-    DB_READY = false;
     loadFromLocalStorage();
-    showSyncStatus('עובד ללא חיבור', 'orange');
+    showSyncStatus('שגיאת חיבור — עובד מגיבוי מקומי בינתיים', 'orange');
   }
 }
 
