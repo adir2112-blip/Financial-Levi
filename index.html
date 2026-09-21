@@ -361,6 +361,10 @@ table.tx td{padding:10px 17px;font-size:12.5px;vertical-align:middle}
     <div class="ch"><div class="ct">TOP 5 קטגוריות הוצאה — המחזור הנוכחי</div></div>
     <div id="insights-top5"></div>
   </div>
+  <div class="card" style="margin-bottom:16px">
+    <div class="ch"><div class="ct">TOP 10 חיובים בודדים — המחזור הנוכחי</div></div>
+    <table class="tx" id="insights-top10"></table>
+  </div>
   <div class="card">
     <div class="ch"><div class="ct">מה לעשות עם זה</div></div>
     <div id="insights-tips"></div>
@@ -810,8 +814,8 @@ function buildRecurring(){
 }
 function openRecurringAdd(){document.getElementById('ov-rec').classList.add('open');}
 function closeRecurringAdd(){document.getElementById('ov-rec').classList.remove('open');}
-function saveRecurring(){const name=document.getElementById('rec-name').value.trim(),amt=parseFloat(document.getElementById('rec-amt').value)||0,day=parseInt(document.getElementById('rec-day').value)||1,cat=document.getElementById('rec-cat').value;if(!name||!amt){toast('\u26a0 נא למלא שם וסכום');return;}RECURRING.push({name,amt,day,cat});localStorage.setItem('kessef_recurring',JSON.stringify(RECURRING));closeRecurringAdd();document.getElementById('rec-name').value='';document.getElementById('rec-amt').value='';buildRecurring();toast('\u2713 חיוב קבוע נוסף');}
-function deleteRecurring(i){RECURRING.splice(i,1);localStorage.setItem('kessef_recurring',JSON.stringify(RECURRING));buildRecurring();toast('\u2713 החיוב הוסר');}
+function saveRecurring(){const name=document.getElementById('rec-name').value.trim(),amt=parseFloat(document.getElementById('rec-amt').value)||0,day=parseInt(document.getElementById('rec-day').value)||1,cat=document.getElementById('rec-cat').value;if(!name||!amt){toast('⚠ נא למלא שם וסכום');return;}RECURRING.push({name,amt,day,cat});saveRecurringToDB().catch(console.error);closeRecurringAdd();document.getElementById('rec-name').value='';document.getElementById('rec-amt').value='';buildRecurring();renderInterim();refreshAll();toast('✓ חיוב קבוע נוסף');}
+function deleteRecurring(i){RECURRING.splice(i,1);saveRecurringToDB().catch(console.error);buildRecurring();renderInterim();refreshAll();toast('✓ החיוב הוסר');}
 
 function buildReports(){
   const key=activeDashCycle||currentCycleKey();
@@ -864,6 +868,13 @@ function buildInsights(){
   const totalExp=expTxs.reduce((s,t)=>s+Math.abs(t.amt),0);
   const catExp={};
   for(const t of expTxs)catExp[t.cat]=(catExp[t.cat]||0)+Math.abs(t.amt);
+
+  // TOP 10 חיובים בודדים (לא לפי קטגוריה — עסקה בודדת) במחזור הנוכחי
+  const top10El=document.getElementById('insights-top10');
+  if(top10El){
+    const top10=[...expTxs].sort((a,b)=>Math.abs(b.amt)-Math.abs(a.amt)).slice(0,10);
+    top10El.innerHTML=rrows(top10);
+  }
 
   // השוואה למחזור הקודם, קטגוריה מול קטגוריה
   const keys=allCycleKeys();
@@ -1465,14 +1476,15 @@ function computeInterim(key){
   const cycleTxs=txsInCycle(key||activeDashCycle||currentCycleKey());
   const maxExp=cycleTxs.filter(t=>t.tp==='expense'&&t.src==='max').reduce((s,t)=>s+Math.abs(t.amt),0);
   const mcExp=cycleTxs.filter(t=>t.tp==='expense'&&t.src==='isracard').reduce((s,t)=>s+Math.abs(t.amt),0);
-  const result=bal+totalInc-maxExp-mcExp;
-  return {bal,totalInc,maxExp,mcExp,result};
+  const recurringExp=RECURRING.reduce((s,r)=>s+r.amt,0); // חיובים קבועים — משכנתא, ביטוחים וכו'
+  const result=bal+totalInc-maxExp-mcExp-recurringExp;
+  return {bal,totalInc,maxExp,mcExp,recurringExp,result};
 }
 function renderInterim(){
   const bEl=document.getElementById('interim-breakdown');
   if(!bEl)return;
   const key=activeDashCycle||currentCycleKey();
-  const {bal,totalInc,maxExp,mcExp,result}=computeInterim(key);
+  const {bal,totalInc,maxExp,mcExp,recurringExp,result}=computeInterim(key);
   bEl.innerHTML=
     '<span>עו"ש: <strong>'+fmt(bal)+'</strong></span>'+
     '<span style="color:var(--faint)">+</span>'+
@@ -1480,7 +1492,9 @@ function renderInterim(){
     '<span style="color:var(--faint)">−</span>'+
     '<span style="color:var(--red)">MAX: <strong>'+fmt(maxExp)+'</strong></span>'+
     '<span style="color:var(--faint)">−</span>'+
-    '<span style="color:var(--red)">מסטרקארד: <strong>'+fmt(mcExp)+'</strong></span>';
+    '<span style="color:var(--red)">מסטרקארד: <strong>'+fmt(mcExp)+'</strong></span>'+
+    (recurringExp?'<span style="color:var(--faint)">−</span>'+
+    '<span style="color:var(--red)">חיובים קבועים: <strong>'+fmt(recurringExp)+'</strong></span>':'');
   const rEl=document.getElementById('interim-result');
   if(rEl){rEl.textContent=fmt(result);rEl.style.color=result>=0?'var(--olive)':'var(--red)';}
 }
