@@ -810,8 +810,11 @@ function buildBudget(){
   document.getElementById('bg').innerHTML=cats.map(([name,{ico,budget}],i)=>{
     const spent=txs.filter(t=>t.tp==='expense'&&t.cat===name).reduce((s,t)=>s+Math.abs(t.amt),0);
     const pct=budget>0?Math.min(100,Math.round(spent/budget*100)):0,over=spent>budget;
-    return'<div class="bc"><div class="bico">'+ico+'</div><div class="bname">'+name+'</div><div class="bamts">'+fmt(spent)+' מתוך '+fmt(budget)+' — '+pct+'%</div><div class="pt"><div class="pf" style="width:'+pct+'%;background:'+(over?'var(--red)':CC[i%CC.length])+'"></div></div><div class="brem" style="color:'+(over?'var(--red)':'var(--olive)')+'">'+( over?'⚠ חריגה של '+fmt(spent-budget):'נותר '+fmt(budget-spent))+'</div><span class="bedit" onclick="openBudgetEdit()">✎ ערוך יעד</span></div>';
+    return'<div class="bc bc-clickable" data-cat="'+encodeURIComponent(name)+'" style="cursor:pointer" title="לחץ לפירוט עסקאות וסיווג מחדש"><div class="bico">'+ico+'</div><div class="bname">'+name+'</div><div class="bamts">'+fmt(spent)+' מתוך '+fmt(budget)+' — '+pct+'%</div><div class="pt"><div class="pf" style="width:'+pct+'%;background:'+(over?'var(--red)':CC[i%CC.length])+'"></div></div><div class="brem" style="color:'+(over?'var(--red)':'var(--olive)')+'">'+( over?'⚠ חריגה של '+fmt(spent-budget):'נותר '+fmt(budget-spent))+'</div><span class="bedit" onclick="event.stopPropagation();openBudgetEdit()">✎ ערוך יעד</span></div>';
   }).join('');
+  document.querySelectorAll('#bg .bc-clickable').forEach(el=>{
+    el.addEventListener('click',()=>openCatDetail(decodeURIComponent(el.dataset.cat)));
+  });
   const canvas=document.getElementById('budget-chart');
   if(canvas){
     const ctx=canvas.getContext('2d');
