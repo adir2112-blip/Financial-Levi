@@ -194,6 +194,10 @@ table.tx td{padding:10px 17px;font-size:12.5px;vertical-align:middle}
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
       קטגוריות
     </div>
+    <div class="ni" onclick="go('insights',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M9.663 17h4.673M12 3a6 6 0 00-4 10.472V15a1 1 0 001 1h6a1 1 0 001-1v-1.528A6 6 0 0012 3z"/><line x1="10" y1="21" x2="14" y2="21"/></svg>
+      תובנות AI
+    </div>
   </nav>
   <div class="sb-foot">
     <div class="sb-ft">מקורות</div>
@@ -229,6 +233,14 @@ table.tx td{padding:10px 17px;font-size:12.5px;vertical-align:middle}
     <div class="sc inc" style="cursor:pointer" onclick="openTxPopup('income')" title="לחץ לפירוט הכנסות"><div class="sc-lbl">הכנסות ↗</div><div class="sc-val g" id="s-income">—</div><div class="sc-d" id="s-income-d"></div></div>
     <div class="sc exp" style="cursor:pointer" onclick="openTxPopup('expense')" title="לחץ לפירוט הוצאות"><div class="sc-lbl">הוצאות ↗</div><div class="sc-val r" id="s-expense">—</div><div class="sc-d" id="s-expense-d"></div></div>
     <div class="sc sav"><div class="sc-lbl">חסכון</div><div class="sc-val s" id="s-saving">—</div><div class="sc-d" id="s-saving-d"></div></div>
+  </div>
+  <div class="card" id="interim-card" style="margin-bottom:16px;cursor:pointer;animation:up .38s ease .05s both" onclick="openInterimEdit()" title="לחץ לעדכון הכנסות קבועות">
+    <div class="ch">
+      <div class="ct">💰 מצב ביניים זמני</div>
+      <div style="font-size:11px;color:var(--muted)">עו"ש + הכנסות קבועות − MAX − מסטרקארד · לחץ לעדכון הכנסות</div>
+    </div>
+    <div id="interim-breakdown" style="display:flex;align-items:center;gap:9px;flex-wrap:wrap;font-size:12.5px;color:var(--ink2);margin-bottom:12px"></div>
+    <div style="font-family:'Playfair Display',serif;font-size:27px;font-weight:500;letter-spacing:-.5px" id="interim-result">—</div>
   </div>
   <div class="forecast-row">
     <div class="fc"><div class="fc-title">צפי סיום מחזור</div><div class="fc-val" id="fc-eom" style="color:var(--olive)">—</div><div class="fc-sub" id="fc-eom-sub"></div><div class="fc-bar"><div class="fc-fill" id="fc-eom-bar" style="background:var(--olive-mid);width:0%"></div></div></div>
@@ -339,6 +351,21 @@ table.tx td{padding:10px 17px;font-size:12.5px;vertical-align:middle}
   <div class="ph"><div><div class="ph-head">דוחות</div><div class="ph-sub">ניתוח פיננסי מעמיק</div></div></div>
   <div class="report-grid" id="report-grid"></div>
 </div>
+<!-- INSIGHTS (AI) -->
+<div class="pg" id="pg-insights">
+  <div class="ph">
+    <div><div class="ph-head">🤖 תובנות AI</div><div class="ph-sub">איפה הולך הכסף שלך, ואיפה כדאי לצמצם</div></div>
+  </div>
+  <div id="insights-headline" style="margin-bottom:16px"></div>
+  <div class="card" style="margin-bottom:16px">
+    <div class="ch"><div class="ct">TOP 5 קטגוריות הוצאה — המחזור הנוכחי</div></div>
+    <div id="insights-top5"></div>
+  </div>
+  <div class="card">
+    <div class="ch"><div class="ct">מה לעשות עם זה</div></div>
+    <div id="insights-tips"></div>
+  </div>
+</div>
 </main>
 <!-- MODALS -->
 <div class="ov" id="ov" onclick="clo(event)">
@@ -447,6 +474,23 @@ table.tx td{padding:10px 17px;font-size:12.5px;vertical-align:middle}
   </div>
 </div>
 
+<!-- פופ-אפ הכנסות קבועות (מצב ביניים) -->
+<div class="ov" id="ov-interim" onclick="if(event.target.id==='ov-interim')closeInterimEdit()">
+  <div class="modal" style="width:360px">
+    <div class="mtitle">💰 עדכון הכנסות קבועות</div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:16px">סכומים חודשיים קבועים, בנוסף ליתרת העו"ש הידנית</div>
+    <div class="fg"><label class="fl">הכנסה קבועה — אדיר (נטו) (₪)</label><input class="fi" id="interim-adir" type="number" placeholder="15000"></div>
+    <div class="fg"><label class="fl">הכנסה קבועה — יקירה (₪)</label><input class="fi" id="interim-yekira" type="number" placeholder="9500"></div>
+    <div class="fg"><label class="fl">הכנסות אדיר — עסק נוסף (₪)</label><input class="fi" id="interim-adirbiz" type="number" placeholder="4000"></div>
+    <div class="fg"><label class="fl">תגמול ביטוח לאומי — אדיר (₪)</label><input class="fi" id="interim-bituach" type="number" placeholder="1000"></div>
+    <div class="fg" style="border-top:1px solid var(--border);padding-top:14px;margin-top:2px"><label class="fl">יעד חיסכון חודשי (₪)</label><input class="fi" id="interim-goal" type="number" placeholder="לדוגמה: 2000"></div>
+    <div class="mact">
+      <button class="mcanc" onclick="closeInterimEdit()">ביטול</button>
+      <button class="msave" onclick="saveInterim()">שמור</button>
+    </div>
+  </div>
+</div>
+
 <!-- פופ-אפ פירוט עסקאות -->
 <div class="ov" id="ov-txpopup" onclick="if(event.target.id==='ov-txpopup')closeTxPopup()">
   <div class="modal" style="width:600px;max-height:80vh;overflow-y:auto">
@@ -516,12 +560,13 @@ function allCycleKeys(){const keys=new Set();for(const t of TXS){keys.add(txCycl
 function buildCycleSelect(id,active){const sel=document.getElementById(id);if(!sel)return;const keys=allCycleKeys();const cur=active||currentCycleKey();sel.innerHTML=keys.map(k=>'<option value="'+k+'"'+(k===cur?' selected':'')+'>'+cycleLabel(k)+'</option>').join('');}
 function txsInCycle(key){return TXS.filter(t=>txCycleKey(t)===key);}
 
-function setDashCycle(key){activeDashCycle=key;renderDashboard();}
+function setDashCycle(key){activeDashCycle=key;renderDashboard();renderInterim();}
 function renderDashboard(){
   const key=activeDashCycle||currentCycleKey();
   const cycleTxs=txsInCycle(key);
-  // הכנסות = מהעו"ש
-  const inc=cycleTxs.filter(t=>t.tp==='income').reduce((s,t)=>s+t.amt,0);
+  // הכנסות = ההכנסות הקבועות שהוגדרו (אדיר + עסק נוסף + ביטוח לאומי + יקירה)
+  const interim=computeInterim(key);
+  const inc=interim.totalInc;
   // הוצאות = כרטיסי אשראי בלבד (ישראכרט + MAX) + חיובים קבועים
   const cardExp=cycleTxs.filter(t=>t.tp==='expense'&&(t.src==='isracard'||t.src==='max')).reduce((s,t)=>s+Math.abs(t.amt),0);
   const recurringExp=RECURRING.reduce((s,r)=>s+r.amt,0);
@@ -540,20 +585,22 @@ function renderDashboard(){
   const r=cycleRange(key),now=new Date();
   const totalDays=r?Math.round((r.to-r.from)/86400000):30;
   const passedDays=r?Math.min(Math.round((now-r.from)/86400000),totalDays):0;
-  const dailyAvg=passedDays>0?exp/passedDays:0;
-  const projExp=dailyAvg*totalDays,projSav=inc-projExp;
-  document.getElementById('fc-eom').textContent=fmt(projSav);
-  document.getElementById('fc-eom-sub').textContent='צפי חסכון לסוף המחזור';
+  const dailyAvg=passedDays>0?cardExp/passedDays:0;
+  // צפי סיום מחזור = מצב ביניים הנוכחי, פחות ההוצאה הנוספת הצפויה בכרטיסים עד
+  // סוף המחזור (קצב ההוצאה היומי הממוצע עד כה, כפול הימים שנותרו)
+  const remainingDays=Math.max(0,totalDays-passedDays);
+  const projRemainingSpend=dailyAvg*remainingDays;
+  const eomProjection=interim.result-projRemainingSpend;
+  document.getElementById('fc-eom').textContent=fmt(eomProjection);
+  document.getElementById('fc-eom-sub').textContent='מצב ביניים משוער ב-10 לחודש, לפי קצב ההוצאה הנוכחי';
   document.getElementById('fc-eom-bar').style.width=Math.min(100,Math.max(0,savPct))+'%';
   document.getElementById('fc-daily').textContent=fmt(dailyAvg);
   document.getElementById('fc-daily-sub').textContent=passedDays+' מתוך '+totalDays+' ימים חלפו';
   document.getElementById('fc-daily-bar').style.width=Math.round(passedDays/totalDays*100)+'%';
   const cdi=document.getElementById('cycle-days-info');
-  if(cdi)cdi.textContent=passedDays+' ימים חלפו \u00b7 '+(totalDays-passedDays)+' נותרו';
-  const keys3=allCycleKeys().slice(1,4);
-  const avg3=keys3.length?keys3.reduce((s,k)=>s+txsInCycle(k).filter(t=>t.tp==='income').reduce((a,t)=>a+t.amt,0),0)/keys3.length:inc;
-  document.getElementById('fc-avg').textContent=fmt(avg3);
-  const savR=avg3>0?Math.min(100,Math.round((avg3-projExp)/avg3*100)):0;
+  if(cdi)cdi.textContent=passedDays+' ימים חלפו · '+(totalDays-passedDays)+' נותרו';
+  document.getElementById('fc-avg').textContent=fmt(inc);
+  const savR=inc>0?Math.min(100,Math.round((inc-exp)/inc*100)):0;
   document.getElementById('fc-avg-bar').style.width=Math.max(0,savR)+'%';
   const dtx=document.getElementById('dtx');
   if(dtx)dtx.innerHTML=cycleTxs.length?rrows(cycleTxs.slice(0,6)):'<tbody><tr><td colspan="5" class="empty">אין עסקאות במחזור זה</td></tr></tbody>';
@@ -796,6 +843,102 @@ function buildReports(){
   '<div class="rcard" style="grid-column:1/-1"><div class="rlbl">המלצות לחסכון</div>'+tips.map(t=>'<div style="font-size:13px;line-height:1.7;padding:7px 0;border-bottom:1px solid var(--border)">'+t+'</div>').join('')+'</div>';
 }
 
+// ══════════════════════════════════════════
+// תובנות AI — TOP 5 קטגוריות הוצאה + המלצות לצמצום
+// ══════════════════════════════════════════
+const CAT_TIPS={
+  'מזון ומסעדות':'תכנון קניות שבועי מראש ורשימת קניות קבועה יכולים לצמצם כ-10–15% מההוצאה הזו — הימנע מקניות "תוך כדי רעב" ומהזמנות משלוחים תכופות.',
+  'קניות':'הגדר תקציב חודשי קבוע לקניות לא-הכרחיות, וחכה 24 שעות לפני רכישה שלא תוכננה מראש.',
+  'תחבורה':'בדוק חיסכון בדלק ע"י תכנון נסיעות מראש, ובדוק פעם בשנה הצעות ביטוח רכב מתחרות.',
+  'חשבונות':'עבור על החיובים הקבועים (טלוויזיה, סלולר, ביטוחים) ובדוק מול ספקים מתחרים — לרוב אפשר לחסוך 10–20% בשיחת טלפון אחת.',
+  'בריאות':'בדוק כיסוי בביטוח המשלים לפני תשלום מהכיס, ונצל את קופת החולים על פני פרטי כשאפשר.',
+  'בידור':'שקול לאחד מנויי סטרימינג/בידור שלא בשימוש קבוע, ולתחם תקציב חודשי קבוע לבידור.',
+  'אחר':'קטגוריה כללית — כדאי לעבור על הפירוט ולסווג עסקאות חוזרות לקטגוריה מדויקת יותר.',
+};
+function catTip(cat){return CAT_TIPS[cat]||'עקוב אחרי הקטגוריה הזו לאורך כמה מחזורים כדי לזהות מגמה ולבנות תקציב מתאים.';}
+
+function buildInsights(){
+  const key=activeDashCycle||currentCycleKey();
+  const curTxs=txsInCycle(key);
+  const expTxs=curTxs.filter(t=>t.tp==='expense');
+  const totalExp=expTxs.reduce((s,t)=>s+Math.abs(t.amt),0);
+  const catExp={};
+  for(const t of expTxs)catExp[t.cat]=(catExp[t.cat]||0)+Math.abs(t.amt);
+
+  // השוואה למחזור הקודם, קטגוריה מול קטגוריה
+  const keys=allCycleKeys();
+  const curIdx=keys.indexOf(key);
+  const prevKey=keys[curIdx+1];
+  const prevCatExp={};
+  if(prevKey){
+    for(const t of txsInCycle(prevKey).filter(t=>t.tp==='expense'))prevCatExp[t.cat]=(prevCatExp[t.cat]||0)+Math.abs(t.amt);
+  }
+
+  const ranked=Object.entries(catExp).sort((a,b)=>b[1]-a[1]);
+  const top5=ranked.slice(0,5);
+
+  const hEl=document.getElementById('insights-headline');
+  if(hEl){
+    if(!top5.length){
+      hEl.innerHTML='<div class="card" style="text-align:center;color:var(--muted);padding:24px">אין עדיין הוצאות מסווגות במחזור הזה — ייבא קבצים כדי לראות תובנות.</div>';
+    }else{
+      const[topCat,topAmt]=top5[0];
+      const pct=totalExp>0?Math.round(topAmt/totalExp*100):0;
+      hEl.innerHTML=
+        '<div class="card" style="background:var(--olive-pale);border-color:var(--olive-mid)">'+
+        '<div style="font-size:12px;color:var(--olive);font-weight:600;letter-spacing:.5px;margin-bottom:6px">התובנה המרכזית</div>'+
+        '<div style="font-size:15px;color:var(--ink2);line-height:1.6">הקטגוריה שבה אתה מוציא הכי הרבה כסף היא <strong>'+topCat+'</strong> — '+
+        fmt(topAmt)+' ('+pct+'% מכלל ההוצאות במחזור). '+catTip(topCat)+'</div>'+
+        '</div>';
+    }
+  }
+
+  const t5El=document.getElementById('insights-top5');
+  if(t5El){
+    if(!top5.length){
+      t5El.innerHTML='<div style="padding:16px;color:var(--muted);font-size:13px">אין נתונים להצגה</div>';
+    }else{
+      t5El.innerHTML=top5.map(([cat,amt],i)=>{
+        const pct=totalExp>0?Math.round(amt/totalExp*100):0;
+        const prevAmt=prevCatExp[cat]||0;
+        const diff=amt-prevAmt;
+        const diffPct=prevAmt>0?Math.round(diff/prevAmt*100):null;
+        const trend=prevKey?(
+          diff>0?'<span style="color:var(--red)">▲ '+(diffPct!==null?diffPct+'%':fmt(diff))+' מהמחזור הקודם</span>':
+          diff<0?'<span style="color:var(--olive)">▼ '+Math.abs(diffPct!==null?diffPct:0)+'% מהמחזור הקודם</span>':
+          '<span style="color:var(--muted)">ללא שינוי</span>'
+        ):'';
+        return '<div class="insight-cat-row" data-cat="'+encodeURIComponent(cat)+'" style="padding:14px 10px;cursor:pointer;border-radius:8px;margin:0 -10px;'+(i<top5.length-1?'border-bottom:1px solid var(--border);':'')+'" title="לחץ לפירוט וסיווג מחדש">'+
+          '<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">'+
+            '<div style="width:22px;height:22px;border-radius:50%;background:var(--olive-pale);color:var(--olive);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0">'+(i+1)+'</div>'+
+            '<div style="flex:1;font-size:13.5px;font-weight:600;color:var(--ink)">'+cat+'</div>'+
+            '<div style="font-family:\'Playfair Display\',serif;font-size:16px;color:var(--ink)">'+fmt(amt)+'</div>'+
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--faint)" stroke-width="2" style="flex-shrink:0"><path d="M9 18l6-6-6-6"/></svg>'+
+          '</div>'+
+          '<div style="width:100%;height:5px;background:var(--cream2);border-radius:2px;overflow:hidden;margin-bottom:6px"><div style="width:'+pct+'%;height:100%;background:var(--olive-mid)"></div></div>'+
+          '<div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted)">'+
+            '<span>'+pct+'% מסך ההוצאות · לחץ לפירוט וסיווג</span>'+trend+
+          '</div>'+
+        '</div>';
+      }).join('');
+      t5El.querySelectorAll('.insight-cat-row').forEach(el=>{
+        el.addEventListener('mouseover',()=>el.style.background='var(--cream)');
+        el.addEventListener('mouseout',()=>el.style.background='');
+        el.addEventListener('click',()=>openCatDetail(decodeURIComponent(el.dataset.cat)));
+      });
+    }
+  }
+
+  const tipsEl=document.getElementById('insights-tips');
+  if(tipsEl){
+    tipsEl.innerHTML=top5.length?top5.map(([cat])=>
+      '<div style="padding:10px 0;border-bottom:1px solid var(--border);font-size:13px;line-height:1.7">'+
+      '<strong style="color:var(--olive)">'+cat+':</strong> '+catTip(cat)+
+      '</div>'
+    ).join(''):'';
+  }
+}
+
 function go(name,el){
   document.querySelectorAll('.pg').forEach(p=>p.classList.remove('on'));
   document.querySelectorAll('.ni').forEach(n=>n.classList.remove('on'));
@@ -807,6 +950,7 @@ function go(name,el){
   if(name==='recurring')buildRecurring();
   if(name==='reports')buildReports();
   if(name==='categories')buildCategoriesPage();
+  if(name==='insights')buildInsights();
 }
 
 function stt(t){ttype=t;document.getElementById('te').classList.toggle('on',t==='expense');document.getElementById('ti').classList.toggle('on',t==='income');}
@@ -887,7 +1031,7 @@ function importExcel(input){
   };reader.readAsArrayBuffer(file);
 }
 
-function refreshAll(){buildCycleSelect('dashCycle',activeDashCycle);buildCycleSelect('txCycle',activeTxCycle);renderDashboard();renderTxTable();}
+function refreshAll(){buildCycleSelect('dashCycle',activeDashCycle);buildCycleSelect('txCycle',activeTxCycle);renderDashboard();renderTxTable();renderInterim();}
 
 function xlDate(raw){
   if(!raw)return'';
@@ -929,7 +1073,7 @@ function parseHapoalim(rows){
       if(r && r[iBalance]!==null && r[iBalance]!==undefined && r[iBalance]!==''){
         const bal=parseFloat(r[iBalance]);
         if(!isNaN(bal)){
-          localStorage.setItem('kessef_balance', bal);
+          saveSettingToDB('kessef_balance', bal);
           console.log('יתרה עדכנית מהקובץ:', bal);
         }
         break;
@@ -1006,10 +1150,20 @@ function parseMastercard(rows){
 }
 
 
+// MAX מחייב ב-11 לחודש (יום אחרי גבול המחזור), בעוד מסטרקארד/ישראכרט מחייבים
+// ב-10 לחודש (בדיוק על גבול המחזור). כדי ששני הכרטיסים ישויכו לאותו מחזור
+// עבור אותה תקופת הוצאה, מזיזים את תאריך החיוב של MAX יום אחד אחורה (11←10)
+// רק לצורך שיוך המחזור ב-txCycleKey.
+function adjMaxChargeDate(raw){
+  const s=xlDate(raw);
+  if(s && s.slice(0,2)==='11') return '10'+s.slice(2);
+  return s;
+}
+
 function parseMax(rows){
   // עמודה A (idx 0) = תאריך עסקה, עמודה B (idx 1) = שם בית העסק
   // עמודה C (idx 2) = קטגוריה, עמודה F (idx 5) = סכום חיוב
-  // עמודה J (idx 9) = תאריך חיוב ← זה התאריך שבו הכסף יורד! 
+  // עמודה J (idx 9) = תאריך חיוב ← זה התאריך שבו הכסף יורד!
   const txs=[];
   const hi=rows.findIndex(r=>r&&r.some(c=>String(c||'').includes('שם בית העסק')));
   if(hi===-1)return txs;
@@ -1022,11 +1176,10 @@ function parseMax(rows){
     const desc=String(r[1]||'').trim();
     const amt=parseFloat(r[5])||0;
     if(!desc||!amt)continue;
-    // השתמש בתאריך חיוב (עמודה J) — שמייצג מתי הכסף ירד בפועל
-    const chargeDate=iChargeDate>=0&&r[iChargeDate]?xlDate(r[iChargeDate]):null;
-    const txDate=iChargeDate>=0&&r[iChargeDate]?xlDate(r[iChargeDate]):xlDate(r[0]);
+    // השתמש בתאריך חיוב (עמודה J) — שמייצג מתי הכסף יורד בפועל, מותאם למחזור
+    const txDate=iChargeDate>=0&&r[iChargeDate]?adjMaxChargeDate(r[iChargeDate]):xlDate(r[0]);
     const catRaw=String(r[2]||'').trim();
-    const cat=catRaw?mapMaxCat(catRaw):autoCategory(desc);
+    const cat=resolveMaxCat(desc,catRaw);
     txs.push({date:txDate,desc,cat,src:'max',amt:-Math.abs(amt),tp:'expense'});
   }
   return txs;
@@ -1035,7 +1188,13 @@ function parseMax(rows){
 
 function mapMaxCat(c){if(c.includes('מזון')||c.includes('מסעדות')||c.includes('קפה'))return'מזון ומסעדות';if(c.includes('אופנה'))return'קניות';if(c.includes('עירייה')||c.includes('ממשלה'))return'חשבונות';if(c.includes('דלק')||c.includes('תחבורה'))return'תחבורה';if(c.includes('בריאות')||c.includes('רפואה'))return'בריאות';if(c.includes('בידור')||c.includes('תרבות'))return'בידור';return'אחר';}
 
-function autoCategory(desc){desc=(desc||'').toLowerCase();if(/משכורת|שכר|טרגט|עבודה/.test(desc))return'משכורת';if(/שופרסל|רמי לוי|מגה|סופר|מזון|ויקטורי|ספיר|דהן|לחם|נאייקס|שבירו/.test(desc))return'מזון ומסעדות';if(/דלק|פז|סונול|תדלוק|רכב/.test(desc))return'תחבורה';if(/ביטוח|קופת חולים|רפואה|רופא|מרפאה|פארמה/.test(desc))return'בריאות';if(/חשמל|מים|גז|ארנונה|עירייה|הוט|בזק|סלקום|פרתנר|מתנס|upay/.test(desc))return'חשבונות';if(/זארה|tcp|בוסטון|אקססורז|אמזון/.test(desc))return'קניות';if(/קולנוע|נטפליקס|ספוטיפי|בידור/.test(desc))return'בידור';return'אחר';}
+// כללי סיווג אישיים (CAT_RULES) גוברים תמיד על הקטגוריה שמגיעה מ-MAX עצמו —
+// כך שאם פעם אחת שינית ידנית את הקטגוריה של עסק מסוים, זה ייזכר גם בייבוא הבא.
+function resolveMaxCat(desc,catRaw){
+  const dl=(desc||'').toLowerCase();
+  for(const rule of CAT_RULES){ if(dl.includes(rule.keyword.toLowerCase())) return rule.cat; }
+  return catRaw?mapMaxCat(catRaw):autoCategory(desc);
+}
 
 // ══════════════════════════════════════════
 // פופ-אפ פירוט עסקאות (לחיצה על כרטיס)
@@ -1187,7 +1346,7 @@ if (!CAT_RULES.length) {
 }
 
 function saveCatRules() {
-  localStorage.setItem('kessef_cat_rules', JSON.stringify(CAT_RULES));
+  saveSettingToDB('kessef_cat_rules', JSON.stringify(CAT_RULES));
 }
 
 function openCatMap() {
@@ -1260,10 +1419,70 @@ function openBalanceInput(){
 function closeBalanceInput(){document.getElementById('ov-balance').classList.remove('open');}
 function saveBalance(){
   const val=parseFloat(document.getElementById('balance-input').value)||0;
-  localStorage.setItem('kessef_balance',val);
+  saveSettingToDB('kessef_balance',val);
   closeBalanceInput();
   renderDashboard();
+  renderInterim();
   toast('✓ יתרה עודכנה — '+fmt(val));
+}
+
+// ══════════════════════════════════════════
+// מצב ביניים זמני — עו"ש + הכנסות קבועות − MAX − מסטרקארד
+// ══════════════════════════════════════════
+// ברירות מחדל להכנסות הקבועות — כפי שנמסרו: אדיר 15,000 נטו, עסק נוסף 4,000,
+// ביטוח לאומי 1,000, יקירה 9,500 בממוצע. כל אחד ניתן לעריכה דרך המודאל.
+const INTERIM_DEFAULTS={adir:15000,yekira:9500,adirbiz:4000,bituach:1000};
+function interimVal(key){
+  const raw=localStorage.getItem('kessef_income_'+key);
+  return raw===null?INTERIM_DEFAULTS[key]:(parseFloat(raw)||0);
+}
+function openInterimEdit(){
+  document.getElementById('interim-adir').value=interimVal('adir');
+  document.getElementById('interim-yekira').value=interimVal('yekira');
+  document.getElementById('interim-adirbiz').value=interimVal('adirbiz');
+  document.getElementById('interim-bituach').value=interimVal('bituach');
+  const goalEl=document.getElementById('interim-goal');
+  if(goalEl)goalEl.value=localStorage.getItem('kessef_savings_goal')||'';
+  document.getElementById('ov-interim').classList.add('open');
+}
+function closeInterimEdit(){document.getElementById('ov-interim').classList.remove('open');}
+function saveInterim(){
+  saveSettingToDB('kessef_income_adir',parseFloat(document.getElementById('interim-adir').value)||0);
+  saveSettingToDB('kessef_income_yekira',parseFloat(document.getElementById('interim-yekira').value)||0);
+  saveSettingToDB('kessef_income_adirbiz',parseFloat(document.getElementById('interim-adirbiz').value)||0);
+  saveSettingToDB('kessef_income_bituach',parseFloat(document.getElementById('interim-bituach').value)||0);
+  const goalEl=document.getElementById('interim-goal');
+  if(goalEl)saveSettingToDB('kessef_savings_goal',parseFloat(goalEl.value)||0);
+  closeInterimEdit();
+  renderInterim();
+  toast('✓ הכנסות קבועות ויעד חיסכון עודכנו');
+}
+// מחשב את נתוני "מצב ביניים" עבור מחזור נתון — עו"ש + הכנסות קבועות − MAX − מסטרקארד
+// נעשה שיתוף בין renderInterim (הכרטיס הייעודי) לבין renderDashboard (צפי סיום מחזור)
+function computeInterim(key){
+  const bal=parseFloat(localStorage.getItem('kessef_balance')||'0');
+  const totalInc=interimVal('adir')+interimVal('yekira')+interimVal('adirbiz')+interimVal('bituach');
+  const cycleTxs=txsInCycle(key||activeDashCycle||currentCycleKey());
+  const maxExp=cycleTxs.filter(t=>t.tp==='expense'&&t.src==='max').reduce((s,t)=>s+Math.abs(t.amt),0);
+  const mcExp=cycleTxs.filter(t=>t.tp==='expense'&&t.src==='isracard').reduce((s,t)=>s+Math.abs(t.amt),0);
+  const result=bal+totalInc-maxExp-mcExp;
+  return {bal,totalInc,maxExp,mcExp,result};
+}
+function renderInterim(){
+  const bEl=document.getElementById('interim-breakdown');
+  if(!bEl)return;
+  const key=activeDashCycle||currentCycleKey();
+  const {bal,totalInc,maxExp,mcExp,result}=computeInterim(key);
+  bEl.innerHTML=
+    '<span>עו"ש: <strong>'+fmt(bal)+'</strong></span>'+
+    '<span style="color:var(--faint)">+</span>'+
+    '<span style="color:var(--olive)">הכנסות: <strong>'+fmt(totalInc)+'</strong></span>'+
+    '<span style="color:var(--faint)">−</span>'+
+    '<span style="color:var(--red)">MAX: <strong>'+fmt(maxExp)+'</strong></span>'+
+    '<span style="color:var(--faint)">−</span>'+
+    '<span style="color:var(--red)">מסטרקארד: <strong>'+fmt(mcExp)+'</strong></span>';
+  const rEl=document.getElementById('interim-result');
+  if(rEl){rEl.textContent=fmt(result);rEl.style.color=result>=0?'var(--olive)':'var(--red)';}
 }
 
 // ══════════════════════════════════════════
@@ -1275,8 +1494,8 @@ function loadBudgetFromStorage(){
 }
 
 function saveBudgetFull(){
-  localStorage.setItem('kessef_budget_full', JSON.stringify(BUDGET));
-  saveBudgetToDB().catch(console.error);
+  saveSettingToDB('kessef_budget_full', JSON.stringify(BUDGET)); // כולל אייקונים — מסונכרן דרך settings
+  saveBudgetToDB().catch(console.error); // סכומי תקציב — מסונכרן גם דרך טבלת budget הייעודית
 }
 
 function buildCategoriesPage(){
@@ -1412,20 +1631,10 @@ function renderCatDetailTable(){
   if(_cdFilter!=='all')txs=txs.filter(t=>txCycleKey(t)===_cdFilter);
   txs=[...txs].sort((a,b)=>{const pd=s=>{if(!s)return 0;const[d,m]=s.split('/');return parseInt(m)*100+parseInt(d);};return pd(b.date)-pd(a.date);});
   const total=txs.reduce((s,t)=>s+Math.abs(t.amt),0);
-  document.getElementById('catdetail-sub').textContent=txs.length+' עסקאות · סה"כ '+fmt(total);
-  if(!txs.length){document.getElementById('catdetail-table').innerHTML='<tbody><tr><td colspan="4" class="empty">אין עסקאות</td></tr></tbody>';return;}
-  document.getElementById('catdetail-table').innerHTML=
-    '<thead><tr><th>תאריך</th><th>תיאור</th><th>מקור</th><th style="text-align:left">סכום</th></tr></thead><tbody>'+
-    txs.map(t=>{
-      const gi=TXS.indexOf(t);
-      const safe=t.desc.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-      return '<tr><td class="tdate">'+t.date+'</td><td class="td">'+safe+'</td>'
-        +'<td class="ts-src" style="color:'+sc(t.src)+'">'+sl(t.src)+'</td>'
-        +'<td class="ta dr" style="display:flex;align-items:center;justify-content:space-between;gap:6px">'
-        +'<span>−₪'+Math.abs(t.amt).toLocaleString()+'</span>'
-        +(gi>=0?'<button onclick="deleteTxInCat('+gi+')" style="background:none;border:none;color:var(--faint);cursor:pointer;font-size:15px;padding:1px 5px;border-radius:4px" onmouseover="this.style.color=\'var(--red)\'" onmouseout="this.style.color=\'var(--faint)\'">×</button>':'')
-        +'</td></tr>';
-    }).join('')+'</tbody>';
+  document.getElementById('catdetail-sub').textContent=txs.length+' עסקאות · סה"כ '+fmt(total)+' · לחץ על עסקה כדי לסווג מחדש';
+  // rrows() מרנדר טבלה לחיצה — לחיצה על שורה פותחת שינוי קטגוריה (openEditCatRow)
+  // שנשמר לצמיתות כלל סיווג (CAT_RULES) לאותו בית עסק
+  document.getElementById('catdetail-table').innerHTML=rrows(txs);
 }
 function deleteTxInCat(gi){
   if(gi<0||gi>=TXS.length)return;
@@ -1451,6 +1660,14 @@ function applyEditCat(){
   TXS.forEach(t=>{const k=t.desc.split(' — ')[0].split(' - ')[0].replace(' (תשלום)','').trim().toLowerCase();if(k===kw){t.cat=nc;cnt++;}});
   const ei=CAT_RULES.findIndex(r=>r.keyword===kw);if(ei>=0)CAT_RULES[ei].cat=nc;else CAT_RULES.unshift({keyword:kw,cat:nc});
   saveCatRules();saveAllTxsToDB().catch(console.error);closeEditCat();renderTxTable();refreshAll();
+  // אם נפתח מתוך פופ-אפ פירוט קטגוריה — רענן גם אותו (העסקה עשויה כבר לא להשתייך לכאן)
+  if(_cdName&&document.getElementById('ov-catdetail').classList.contains('open')){
+    _cdTxs=TXS.filter(t=>t.tp==='expense'&&t.cat===_cdName);
+    renderCatDetailTable();
+  }
+  // אם עמוד תובנות AI פעיל — רענן גם אותו
+  const insightsPg=document.getElementById('pg-insights');
+  if(insightsPg&&insightsPg.classList.contains('on'))buildInsights();
   toast('✓ עודכנו '+cnt+' עסקאות + כלל נשמר');
 }
 
@@ -1496,8 +1713,8 @@ function toast(msg){const e=document.getElementById('t');e.textContent=msg;e.cla
 // ══════════════════════════════════════════
 // SUPABASE — חיבור לבסיס הנתונים
 // ══════════════════════════════════════════
-const SUPABASE_URL = 'https://mbgwzetikdylazciqxdx.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1iZ3d6ZXRpa2R5bGF6Y2lxeGR4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcxMDg3NTMsImV4cCI6MjA5MjY4NDc1M30.Pe9-TBMEwad6oi7XHj98JtrW3DFK_wdWnYE1k1yViZU';
+const SUPABASE_URL = 'https://ynfxozslmzqsmdsgxlbf.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InluZnhvenNsbXpxc21kc2d4bGJmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAwMDE5MjEsImV4cCI6MjEwNTU3NzkyMX0.QueSztXSj4bqo9pFdjKt_KfJa9ByY8uKRD4_1HMD2P8';
 let db = null;
 let DB_READY = false;
 
@@ -1511,10 +1728,18 @@ async function initSupabase() {
     db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
     DB_READY = true;
     showSyncStatus('מתחבר לבסיס הנתונים...');
-    await loadFromDB();
-    showSyncStatus('✓ מחובר ומסונכרן', 'green');
+    const ok = await loadFromDB();
+    if (ok) {
+      showSyncStatus('✓ מחובר ומסונכרן', 'green');
+    } else {
+      // אין חיבור אמיתי לענן (פרויקט לא זמין/כתובת שגויה) — אל תציג "מחובר" באופן מטעה
+      DB_READY = false;
+      loadFromLocalStorage();
+      showSyncStatus('⚠ אין חיבור לענן — עובד מזיכרון מקומי', 'orange');
+    }
   } catch(err) {
     console.error('Supabase error:', err);
+    DB_READY = false;
     loadFromLocalStorage();
     showSyncStatus('עובד ללא חיבור', 'orange');
   }
@@ -1526,26 +1751,69 @@ function showSyncStatus(msg, color='var(--muted)') {
 }
 
 // ── טעינה מ-Supabase ──
+// מחזיר true אם באמת הצליח להתחבר ולקרוא, false אם אין חיבור אמיתי (למשל
+// פרויקט שנמחק/כתובת שגויה) — כדי שלא נציג "מחובר" באופן מטעה כשלא באמת קרה כלום
 async function loadFromDB() {
-  if (!DB_READY) return;
-  const { data: txData, error: txErr } = await db.from('transactions').select('*').order('created_at', { ascending: false });
-  if (!txErr && txData) {
-    TXS = txData.map(r => ({ date: r.date, desc: r.description, cat: r.cat, src: r.src, amt: parseFloat(r.amt), tp: r.tp }));
+  if (!DB_READY) return false;
+  try {
+    const { data: txData, error: txErr } = await db.from('transactions').select('*').order('created_at', { ascending: false });
+    if (txErr) throw txErr;
+    if (txData && txData.length) {
+      TXS = txData.map(r => ({ date: r.date, desc: r.description, cat: r.cat, src: r.src, amt: parseFloat(r.amt), tp: r.tp }));
+    } else {
+      // הענן ריק (למשל אחרי מעבר לפרויקט Supabase חדש) — אם יש גיבוי מקומי מה-
+      // דפדפן הזה, טען אותו ודחוף אותו לענן החדש, כדי שלא "ייעלם" מידע קיים
+      const localTxs = localStorage.getItem('kessef_txs');
+      if (localTxs) {
+        try { TXS = JSON.parse(localTxs) || []; } catch(e) { TXS = []; }
+        if (TXS.length) saveAllTxsToDB().catch(console.error);
+      }
+    }
+    const { data: recData, error: recErr } = await db.from('recurring').select('*');
+    if (!recErr && recData) {
+      RECURRING = recData.map(r => ({ name: r.name, amt: parseFloat(r.amt), day: r.day, cat: r.cat }));
+    }
+    const { data: budData, error: budErr } = await db.from('budget').select('*');
+    if (!budErr && budData) {
+      budData.forEach(r => { if (BUDGET[r.category]) BUDGET[r.category].budget = parseFloat(r.amount); });
+    }
+    await loadSettingsFromDB();
+    refreshAll();
+    if (document.querySelector('.ni.on')) {
+      const activePage = document.querySelector('.pg.on')?.id?.replace('pg-','');
+      if (activePage === 'budget') buildBudget();
+      if (activePage === 'recurring') buildRecurring();
+    }
+    return true;
+  } catch(e) {
+    console.error('loadFromDB failed:', e);
+    return false;
   }
-  const { data: recData, error: recErr } = await db.from('recurring').select('*');
-  if (!recErr && recData) {
-    RECURRING = recData.map(r => ({ name: r.name, amt: parseFloat(r.amt), day: r.day, cat: r.cat }));
-  }
-  const { data: budData, error: budErr } = await db.from('budget').select('*');
-  if (!budErr && budData) {
-    budData.forEach(r => { if (BUDGET[r.category]) BUDGET[r.category].budget = parseFloat(r.amount); });
-  }
-  refreshAll();
-  if (document.querySelector('.ni.on')) {
-    const activePage = document.querySelector('.pg.on')?.id?.replace('pg-','');
-    if (activePage === 'budget') buildBudget();
-    if (activePage === 'recurring') buildRecurring();
-  }
+}
+
+// ── הגדרות כלליות (עו"ש, הכנסות קבועות, יעד חיסכון) — טבלת settings ──
+// נדרש כדי שתהליך שרץ מחוץ לדפדפן (כמו קרון שבועי לוואטסאפ) יוכל לקרוא אותן
+async function loadSettingsFromDB(){
+  if(!DB_READY)return;
+  try{
+    const{data,error}=await db.from('settings').select('*');
+    if(error){console.error('settings load error:',error);return;}
+    if(data)data.forEach(row=>{if(row.value!==null&&row.value!==undefined)localStorage.setItem(row.key,row.value);});
+    // CAT_RULES ו-BUDGET כבר אותחלו (סינכרונית) מ-localStorage לפני שהעננית הספיקה
+    // להיטען — לכן צריך לרענן אותם עכשיו מהערכים שהגיעו מהענן
+    const rulesRaw=localStorage.getItem('kessef_cat_rules');
+    if(rulesRaw){try{const r=JSON.parse(rulesRaw);if(Array.isArray(r)){CAT_RULES.length=0;CAT_RULES.push(...r);}}catch(e){}}
+    const budgetRaw=localStorage.getItem('kessef_budget_full');
+    if(budgetRaw){try{Object.assign(BUDGET,JSON.parse(budgetRaw));}catch(e){}}
+  }catch(e){console.error(e);}
+}
+async function saveSettingToDB(key,value){
+  localStorage.setItem(key,value);
+  if(!DB_READY)return;
+  try{
+    const{error}=await db.from('settings').upsert({key,value:String(value)},{onConflict:'key'});
+    if(error)console.error('settings save error:',error);
+  }catch(e){console.error('settings save error:',e);}
 }
 
 // ── שמירת עסקאות ל-Supabase ──
