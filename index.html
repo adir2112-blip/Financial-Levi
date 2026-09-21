@@ -1982,7 +1982,20 @@ async function saveTxsToDB(newTxs) {
 // עלולות למחוק ואז להכניס את כל TXS בנפרד, וכך כל עסקה מוכפלת. הנעילה כאן
 // מוודאת שרק ריצה אחת של מחיקה+הכנסה קורית בכל רגע נתון.
 let _savingTxs=false,_savePending=false;
+// רשת ביטחון אחרונה: מסיר כפילויות מתוך TXS עצמו (לפי תאריך+מקור+תיאור+סכום)
+// לפני כל שמירה, בלי קשר למקור הכפילות — כך שהתצוגה והענן תמיד יהיו נקיים
+function dedupeTxs(){
+  const seen=new Set(),out=[];
+  for(const t of TXS){
+    const k=t.date+'_'+t.src+'_'+t.desc+'_'+Math.round(Math.abs(t.amt)*100);
+    if(seen.has(k))continue;
+    seen.add(k);out.push(t);
+  }
+  if(out.length!==TXS.length){TXS.length=0;TXS.push(...out);}
+}
+
 async function saveAllTxsToDB(){
+  dedupeTxs();
   saveToLocalStorage();
   if(!DB_READY||!TXS.length)return;
   if(_savingTxs){_savePending=true;return;}
