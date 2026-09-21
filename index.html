@@ -1031,6 +1031,14 @@ function saveTx(){
   refreshAll();toast('\u2713 העסקא נוספה');
 }
 
+// מבקש מהבוט לבדוק חריגות תקציב מיד אחרי ייבוא — זה הרגע היחיד שבו הוצאות
+// בפועל יכולות להשתנות, אז אין טעם לבדוק על ציר זמן קבוע. Fire-and-forget:
+// לא חוסם את הייבוא, ולא מציג שגיאה אם הבוט לא זמין כרגע.
+function triggerBudgetCheck(){
+  fetch('https://whatsapp-bot-production-120a.up.railway.app/api/kessef-check-budget',{method:'POST'})
+    .catch(err=>console.warn('לא הצלחתי להפעיל בדיקת תקציב בבוט:',err));
+}
+
 function importExcelMulti(input) {
   const files = Array.from(input.files);
   if (!files.length) return;
@@ -1070,6 +1078,7 @@ function importExcelMulti(input) {
         toast('✓ יובאו ' + totalAdded + ' עסקאות מ-' + files.length + ' קבצים');
         const ending = detectEndingInstallments(allParsedTxs);
         if (ending.length) showEndingInstallments(ending);
+        triggerBudgetCheck();
       }
     };
     reader.readAsArrayBuffer(file);
