@@ -1065,8 +1065,8 @@ function importExcelMulti(input) {
           allParsedTxs.push(...newTxs);
           let added = 0;
           for (const tx of newTxs) {
-            const key = tx.date+'_'+tx.src+'_'+tx.desc+'_'+Math.round(Math.abs(tx.amt)*100);
-            if (!TXS.some(t=>t.date+'_'+t.src+'_'+t.desc+'_'+Math.round(Math.abs(t.amt)*100)===key)) { TXS.push(tx); added++; totalAdded++; }
+            const key = tx.date+'_'+tx.src+'_'+txDedupDesc(tx.desc)+'_'+Math.round(Math.abs(tx.amt)*100);
+            if (!TXS.some(t=>t.date+'_'+t.src+'_'+txDedupDesc(t.desc)+'_'+Math.round(Math.abs(t.amt)*100)===key)) { TXS.push(tx); added++; totalAdded++; }
           }
         }
       } catch(err) { console.error(file.name, err); }
@@ -1984,13 +1984,23 @@ async function saveTxsToDB(newTxs) {
 let _savingTxs=false,_savePending=false;
 // רשת ביטחון אחרונה: מסיר כפילויות מתוך TXS עצמו (לפי תאריך+מקור+תיאור+סכום)
 // לפני כל שמירה, בלי קשר למקור הכפילות — כך שהתצוגה והענן תמיד יהיו נקיים
+// עסקת תשלומים עשויה להיקרא פעם עם הסיומת "(תשלום)" ופעם בלעדיה (תלוי אם
+// קובץ הכרטיס חשף את סוג העסקה באותו ייבוא) — מתעלמים מהסיומת בזיהוי
+// כפילויות, כדי שלא ניצור שתי רשומות לאותו חיוב אמיתי.
+function txDedupDesc(desc){
+  return (desc||'').replace(/ \(תשלום\)$/,'');
+}
 function dedupeTxs(){
-  const seen=new Set(),out=[];
+  const byKey={};
   for(const t of TXS){
-    const k=t.date+'_'+t.src+'_'+t.desc+'_'+Math.round(Math.abs(t.amt)*100);
-    if(seen.has(k))continue;
-    seen.add(k);out.push(t);
+    const k=t.date+'_'+t.src+'_'+txDedupDesc(t.desc)+'_'+Math.round(Math.abs(t.amt)*100);
+    const existing=byKey[k];
+    if(!existing){byKey[k]=t;continue;}
+    // בהתנגשות, עדיפות לגרסה עם יותר מידע (אסמכתא/מספר תשלום)
+    const score=x=>(x.ref?1:0)+(x.instCur?1:0)+(x.instTotal?1:0);
+    if(score(t)>score(existing))byKey[k]=t;
   }
+  const out=Object.values(byKey);
   if(out.length!==TXS.length){TXS.length=0;TXS.push(...out);}
 }
 
