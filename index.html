@@ -324,6 +324,12 @@ table.tx td{padding:10px 17px;font-size:12.5px;vertical-align:middle}
   </div>
   <div class="rec-total" id="rec-summary"></div>
   <div class="rgrid" id="rec-grid"></div>
+  <div id="rec-price-alerts" style="margin-top:16px"></div>
+  <div class="card" style="margin-top:16px" id="rec-subs-card">
+    <div class="ch"><div class="ct">🔍 מועמדים לחיוב קבוע</div></div>
+    <div style="font-size:12.5px;color:var(--muted);margin-bottom:12px">חיובים שחוזרים כל חודש מאותו בית עסק, אבל עדיין לא ברשימה למעלה — כדאי לבדוק שאתם עדיין רוצים אותם</div>
+    <div id="rec-subs-list"></div>
+  </div>
 </div>
 <!-- REPORTS -->
 <!-- CATEGORIES PAGE -->
@@ -385,6 +391,20 @@ table.tx td{padding:10px 17px;font-size:12.5px;vertical-align:middle}
     <div><div class="ph-head">💵 שורה תחתונה</div><div class="ph-sub">תמונת מצב פיננסית — המחזור הנוכחי</div></div>
   </div>
   <div class="sg" id="bl-stats" style="grid-template-columns:repeat(3,1fr);margin-bottom:16px"></div>
+  <div class="card" style="margin-bottom:16px">
+    <div class="ch"><div class="ct">📈 מגמת תזרים חודשי — מחזורים אחרונים</div></div>
+    <div style="font-size:11.5px;color:var(--muted);margin-bottom:10px">הכנסות קבועות פחות הוצאות כרטיסים והוצאות קבועות, לכל מחזור — כדי לראות אם המגמה משתפרת</div>
+    <div style="position:relative;height:220px"><canvas id="trend-chart"></canvas></div>
+  </div>
+  <div class="card" style="margin-bottom:16px">
+    <div class="ch"><div class="ct">🎛️ סימולטור — מה אם אצמצם קטגוריה?</div></div>
+    <div style="font-size:11.5px;color:var(--muted);margin-bottom:12px">גרור להערכת ההשפעה על סה"כ החיסכון הצפוי — לא משנה כלום בפועל</div>
+    <div id="sim-sliders"></div>
+    <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+      <span style="font-size:12.5px;color:var(--muted)">חיסכון צפוי מקורי: <strong id="sim-base">—</strong></span>
+      <span style="font-size:15px">חיסכון צפוי אחרי צמצום: <strong id="sim-result" style="font-family:'Playfair Display',serif;font-size:19px"></strong></span>
+    </div>
+  </div>
   <div class="card">
     <div class="ch"><div class="ct">📆 תשלומים פעילים לפי קטגוריה</div></div>
     <div id="bl-installments"></div>
@@ -884,7 +904,89 @@ function buildRecurring(){
   document.getElementById('rec-summary').innerHTML='<div style="display:flex;gap:20px;align-items:center;flex:1"><div><div style="font-size:10px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.8px;margin-bottom:3px">סה"כ לחודש</div><div style="font-family:\'Playfair Display\',serif;font-size:21px;color:var(--red)">'+fmt(total)+'</div></div><div><div style="font-size:10px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.8px;margin-bottom:3px">לשנה</div><div style="font-family:\'Playfair Display\',serif;font-size:21px">'+fmt(total*12)+'</div></div><div><div style="font-size:10px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.8px;margin-bottom:3px">מספר חיובים</div><div style="font-family:\'Playfair Display\',serif;font-size:21px">'+RECURRING.length+'</div></div></div>';
   const icons={'משכנתא':'🏠','ביטוח':'🛡️','תקשורת':'📱','חינוך':'📚','מנויים':'📺','רכב':'🚗','אחר':'💳'};
   document.getElementById('rec-grid').innerHTML=RECURRING.length?RECURRING.map((r,i)=>'<div class="rc"><div class="rc-top"><div><div class="rc-cat">'+(icons[r.cat]||'💳')+' '+r.cat+'</div><div class="rc-name">'+r.name+'</div></div><span class="rc-del" onclick="deleteRecurring('+i+')" title="מחק">×</span></div><div class="rc-amt">\u2212'+fmt(r.amt)+'</div><div class="rc-day">מחויב בכל חודש ב-'+r.day+'</div></div>').join(''):'<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--muted);font-size:13.5px">אין חיובים קבועים עדיין</div>';
+  renderSubscriptionCandidates();
+  renderPriceAlerts();
 }
+
+// מועמדים לחיוב קבוע: בית עסק שחוזר בלפחות 2 מחזורים שונים ועדיין לא רשום
+// ברשימת החיובים הקבועים — לרוב מנוי ששכחו שיש להם.
+function renderSubscriptionCandidates(){
+  const el=document.getElementById('rec-subs-list');
+  if(!el)return;
+  const merchants={};
+  TXS.filter(t=>t.tp==='expense').forEach(t=>{
+    const name=t.desc.split(' — ')[0].split(' - ')[0].replace(' (תשלום)','').trim();
+    if(!name)return;
+    const k=name+'|'+t.src;
+    if(!merchants[k])merchants[k]={cycles:new Set(),amts:[],cat:t.cat,name};
+    merchants[k].cycles.add(txCycleKey(t));
+    merchants[k].amts.push(Math.abs(t.amt));
+  });
+  const recNamesL=RECURRING.map(r=>r.name.toLowerCase());
+  const candidates=Object.values(merchants).filter(m=>{
+    if(m.cycles.size<2)return false;
+    const nl=m.name.toLowerCase();
+    return !recNamesL.some(rn=>nl.includes(rn)||rn.includes(nl));
+  }).sort((a,b)=>b.cycles.size-a.cycles.size);
+  if(!candidates.length){
+    el.innerHTML='<div style="padding:12px 0;color:var(--muted);font-size:13px">לא נמצאו מנויים חוזרים שעדיין לא רשומים</div>';
+    return;
+  }
+  el.innerHTML=candidates.slice(0,10).map(c=>{
+    const avgAmt=c.amts.reduce((s,a)=>s+a,0)/c.amts.length;
+    return '<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--border);font-size:13px">'+
+      '<div><strong>'+c.name+'</strong> <span style="color:var(--muted);font-size:11px">('+c.cat+' · הופיע ב-'+c.cycles.size+' מחזורים)</span></div>'+
+      '<div style="display:flex;align-items:center;gap:10px">'+
+        '<span style="color:var(--red)">'+fmt(avgAmt)+'</span>'+
+        '<button class="btn-s" style="padding:5px 10px;font-size:11.5px" data-name="'+encodeURIComponent(c.name)+'" data-amt="'+Math.round(avgAmt)+'" onclick="quickAddRecurring(this)">+ הוסף</button>'+
+      '</div>'+
+    '</div>';
+  }).join('');
+}
+function quickAddRecurring(btn){
+  const name=decodeURIComponent(btn.dataset.name),amt=parseFloat(btn.dataset.amt)||0;
+  RECURRING.push({name,amt,day:10,cat:'אחר'});
+  saveRecurringToDB().catch(console.error);
+  buildRecurring();renderInterim();refreshAll();
+  toast('✓ '+name+' נוסף לחיובים קבועים');
+}
+
+// משווה בין הסכום הרשום בחיוב קבוע לבין מה שבפועל ירד השם הזה במחזור הנוכחי
+function renderPriceAlerts(){
+  const el=document.getElementById('rec-price-alerts');
+  if(!el)return;
+  const key=activeDashCycle||currentCycleKey();
+  const cycleTxs=txsInCycle(key).filter(t=>t.tp==='expense');
+  const alerts=[];
+  RECURRING.forEach(r=>{
+    const nameL=r.name.toLowerCase();
+    const matches=cycleTxs.filter(t=>{
+      const merch=t.desc.split(' — ')[0].split(' - ')[0].trim().toLowerCase();
+      return merch.includes(nameL)||nameL.includes(merch);
+    });
+    if(!matches.length)return;
+    const actual=matches.reduce((s,t)=>s+Math.abs(t.amt),0)/matches.length;
+    const diff=actual-r.amt;
+    if(Math.abs(diff)>Math.max(10,r.amt*0.05))alerts.push({name:r.name,registered:r.amt,actual,diff});
+  });
+  if(!alerts.length){el.innerHTML='';return;}
+  el.innerHTML='<div class="card" style="border-color:var(--sand)">'+
+    '<div class="ch"><div class="ct">⚠️ שינוי מחיר בחיוב קבוע</div></div>'+
+    alerts.map(a=>
+      '<div style="padding:9px 0;border-bottom:1px solid var(--border);font-size:13px;display:flex;justify-content:space-between;align-items:center">'+
+      '<span><strong>'+a.name+'</strong>: רשום '+fmt(a.registered)+', בפועל '+fmt(a.actual)+
+      ' <span style="color:'+(a.diff>0?'var(--red)':'var(--olive)')+'">('+(a.diff>0?'+':'')+fmt(a.diff)+')</span></span>'+
+      '<button class="btn-s" style="padding:5px 10px;font-size:11.5px" data-name="'+encodeURIComponent(a.name)+'" data-amt="'+Math.round(a.actual)+'" onclick="updateRecurringAmt(this)">עדכן</button>'+
+      '</div>'
+    ).join('')+
+  '</div>';
+}
+function updateRecurringAmt(btn){
+  const name=decodeURIComponent(btn.dataset.name),newAmt=parseFloat(btn.dataset.amt)||0;
+  const r=RECURRING.find(x=>x.name===name);
+  if(r){r.amt=newAmt;saveRecurringToDB().catch(console.error);buildRecurring();renderInterim();refreshAll();toast('✓ הסכום עודכן');}
+}
+
 function openRecurringAdd(){document.getElementById('ov-rec').classList.add('open');}
 function closeRecurringAdd(){document.getElementById('ov-rec').classList.remove('open');}
 function saveRecurring(){const name=document.getElementById('rec-name').value.trim(),amt=parseFloat(document.getElementById('rec-amt').value)||0,day=parseInt(document.getElementById('rec-day').value)||1,cat=document.getElementById('rec-cat').value;if(!name||!amt){toast('⚠ נא למלא שם וסכום');return;}RECURRING.push({name,amt,day,cat});saveRecurringToDB().catch(console.error);closeRecurringAdd();document.getElementById('rec-name').value='';document.getElementById('rec-amt').value='';buildRecurring();renderInterim();refreshAll();toast('✓ חיוב קבוע נוסף');}
@@ -1101,6 +1203,87 @@ function buildBottomLine(){
       ).join('');
     }
   }
+  renderSavingsTrend();
+  buildSimulator();
+}
+
+// מגמת תזרים נטו (הכנסות קבועות פחות הוצאות כרטיסים והוצאות קבועות) על פני
+// המחזורים האחרונים — כדי לראות אם המצב באמת משתפר או רק מתנדנד
+function renderSavingsTrend(){
+  const canvas=document.getElementById('trend-chart');
+  if(!canvas)return;
+  const keys=allCycleKeys().slice(0,8).reverse();
+  if(!keys.length)return;
+  const totalInc=interimVal('adir')+interimVal('yekira')+interimVal('adirbiz')+interimVal('bituach');
+  const recurringExp=RECURRING.reduce((s,r)=>s+r.amt,0);
+  const data=keys.map(k=>{
+    const txs=txsInCycle(k);
+    const cardExp=txs.filter(t=>t.tp==='expense'&&(t.src==='max'||t.src==='isracard')).reduce((s,t)=>s+Math.abs(t.amt),0);
+    return totalInc-cardExp-recurringExp;
+  });
+  const ctx=canvas.getContext('2d');
+  if(window._trendChart){window._trendChart.destroy();}
+  window._trendChart=new Chart(ctx,{
+    type:'bar',
+    data:{
+      labels:keys.map(k=>cycleLabel(k).substring(3,8)),
+      datasets:[{label:'תזרים נטו',data:data.map(v=>Math.round(v)),backgroundColor:data.map(v=>v>=0?'#8fb389':'#e08a7d'),borderRadius:5}]
+    },
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+fmt(c.parsed.y)}}},
+      scales:{y:{ticks:{font:{size:10}}},x:{ticks:{font:{size:10}}}},
+      animation:{duration:500}
+    }
+  });
+}
+
+// סימולטור "מה אם" — גרירת אחוז צמצום לכל קטגוריה מציגה מיד את ההשפעה על
+// הצפי לסוף המחזור, בלי לשנות שום דבר בפועל
+function buildSimulator(){
+  const key=activeDashCycle||currentCycleKey();
+  const txs=txsInCycle(key).filter(t=>t.tp==='expense');
+  const catExp={};
+  txs.forEach(t=>{catExp[t.cat]=(catExp[t.cat]||0)+Math.abs(t.amt);});
+  const cats=Object.entries(catExp).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  const interim=computeInterim(key);
+  const r=cycleRange(key),now=new Date();
+  const totalDays=r?Math.round((r.to-r.from)/86400000):30;
+  const passedDays=r?Math.max(1,Math.min(Math.round((now-r.from)/86400000),totalDays)):1;
+  const remainingDays=Math.max(0,totalDays-passedDays);
+  const cardExp=interim.maxExp+interim.mcExp;
+  const dailyAvg=cardExp/passedDays;
+  const baseProjection=interim.result-dailyAvg*remainingDays;
+
+  const baseEl=document.getElementById('sim-base');
+  if(baseEl)baseEl.textContent=fmt(baseProjection);
+
+  const slidersEl=document.getElementById('sim-sliders');
+  if(!slidersEl)return;
+  if(!cats.length){slidersEl.innerHTML='<div style="color:var(--muted);font-size:13px">אין עדיין הוצאות מסווגות במחזור הזה</div>';return;}
+  slidersEl.innerHTML=cats.map(([cat,amt],i)=>
+    '<div style="margin-bottom:14px">'+
+      '<div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:4px"><span>'+cat+' ('+fmt(amt)+')</span><span id="sim-pct-'+i+'" style="color:var(--olive);font-weight:600">0%</span></div>'+
+      '<input type="range" min="0" max="50" value="0" data-amt="'+amt+'" id="sim-slider-'+i+'" style="width:100%" oninput="updateSimulator()">'+
+    '</div>'
+  ).join('');
+  window._simBase=baseProjection;
+  updateSimulator();
+}
+function updateSimulator(){
+  const sliders=document.querySelectorAll('#sim-sliders input[type=range]');
+  let totalCut=0;
+  sliders.forEach((s,i)=>{
+    const pct=parseInt(s.value)||0;
+    const amt=parseFloat(s.dataset.amt)||0;
+    const pctEl=document.getElementById('sim-pct-'+i);
+    if(pctEl)pctEl.textContent=pct+'%';
+    totalCut+=amt*(pct/100);
+  });
+  const base=window._simBase||0;
+  const result=base+totalCut;
+  const resEl=document.getElementById('sim-result');
+  if(resEl){resEl.textContent=fmt(result);resEl.style.color=result>=0?'var(--olive)':'var(--red)';}
 }
 
 function go(name,el){
