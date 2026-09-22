@@ -199,6 +199,10 @@ table.tx td{padding:10px 17px;font-size:12.5px;vertical-align:middle}
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M9.663 17h4.673M12 3a6 6 0 00-4 10.472V15a1 1 0 001 1h6a1 1 0 001-1v-1.528A6 6 0 0012 3z"/><line x1="10" y1="21" x2="14" y2="21"/></svg>
       תובנות AI
     </div>
+    <div class="ni" onclick="go('bottomline',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
+      שורה תחתונה
+    </div>
   </nav>
   <div class="sb-foot">
     <div class="sb-ft">מקורות</div>
@@ -373,6 +377,17 @@ table.tx td{padding:10px 17px;font-size:12.5px;vertical-align:middle}
   <div class="card">
     <div class="ch"><div class="ct">מה לעשות עם זה</div></div>
     <div id="insights-tips"></div>
+  </div>
+</div>
+<!-- BOTTOM LINE -->
+<div class="pg" id="pg-bottomline">
+  <div class="ph">
+    <div><div class="ph-head">💵 שורה תחתונה</div><div class="ph-sub">תמונת מצב פיננסית — המחזור הנוכחי</div></div>
+  </div>
+  <div class="sg" id="bl-stats" style="grid-template-columns:repeat(3,1fr);margin-bottom:16px"></div>
+  <div class="card">
+    <div class="ch"><div class="ct">📆 תשלומים פעילים לפי קטגוריה</div></div>
+    <div id="bl-installments"></div>
   </div>
 </div>
 </main>
@@ -1008,6 +1023,86 @@ function buildInsights(){
   }
 }
 
+// ══════════════════════════════════════════
+// שורה תחתונה — תמונת מצב מרוכזת (אותו תוכן שבהודעת הוואטסאפ השבועית)
+// ══════════════════════════════════════════
+function buildBottomLine(){
+  const key=activeDashCycle||currentCycleKey();
+  const interim=computeInterim(key);
+  const r=cycleRange(key),now=new Date();
+  const totalDays=r?Math.round((r.to-r.from)/86400000):30;
+  const passedDays=r?Math.max(1,Math.min(Math.round((now-r.from)/86400000),totalDays)):1;
+  const remainingDays=Math.max(0,totalDays-passedDays);
+  const cardExp=interim.maxExp+interim.mcExp;
+  const dailyAvg=cardExp/passedDays;
+  const eomProjection=interim.result-dailyAvg*remainingDays;
+
+  const cards=[
+    {lbl:'הכנסות (סה"כ)',val:interim.totalInc,cls:'g'},
+    {lbl:'הוצאות MAX (יקירה)',val:interim.maxExp,cls:'r'},
+    {lbl:'הוצאות מסטרקארד (אדיר)',val:interim.mcExp,cls:'r'},
+    {lbl:'הוצאות קבועות (משכנתא וכו\')',val:interim.recurringExp,cls:'r'},
+    {lbl:'סה"כ חיסכון נכון לעכשיו',val:interim.result,cls:interim.result>=0?'g':'r'},
+    {lbl:'סה"כ חיסכון צפוי (לפי קצב יומי)',val:eomProjection,cls:eomProjection>=0?'g':'r'},
+  ];
+  const statsEl=document.getElementById('bl-stats');
+  if(statsEl){
+    statsEl.innerHTML=cards.map(c=>
+      '<div class="sc"><div class="sc-lbl">'+c.lbl+'</div><div class="sc-val '+c.cls+'">'+fmt(c.val)+'</div></div>'
+    ).join('');
+  }
+
+  // תשלומים פעילים לפי קטגוריה — אותה לוגיקה כמו בבוט (כולל דריסה ידנית אם הוגדרה)
+  let overrides={};
+  try{overrides=JSON.parse(localStorage.getItem('kessef_installment_overrides')||'{}');}catch(e){overrides={};}
+  const items=[];
+  const maxGroups={};
+  TXS.filter(t=>t.src==='max'&&t.instTotal).forEach(t=>{
+    const k=t.desc+'|'+t.instTotal;
+    if(!maxGroups[k]||t.instCur>maxGroups[k].instCur)maxGroups[k]=t;
+  });
+  Object.values(maxGroups).forEach(t=>{
+    const remaining=t.instTotal-t.instCur;
+    if(remaining>0)items.push({desc:t.desc,cat:t.cat,remaining,monthlyAmt:Math.abs(t.amt)});
+  });
+  const mcByRef={};
+  TXS.filter(t=>t.src==='isracard'&&t.ref&&t.instTotal).forEach(t=>{(mcByRef[t.ref]=mcByRef[t.ref]||[]).push(t);});
+  Object.entries(mcByRef).forEach(([ref,rows])=>{
+    const override=overrides[ref];
+    const cur=override!==undefined?override:rows.length;
+    const total=override!==undefined?Math.max(rows[0].instTotal,override):rows[0].instTotal;
+    const remaining=total-cur;
+    if(remaining>0)items.push({desc:rows[0].desc,cat:rows[0].cat,remaining,monthlyAmt:Math.abs(rows[0].amt)});
+  });
+
+  const instEl=document.getElementById('bl-installments');
+  if(instEl){
+    if(!items.length){
+      instEl.innerHTML='<div style="padding:16px 0;color:var(--muted);font-size:13px">אין כרגע תשלומים פעילים</div>';
+    }else{
+      const byCat={};
+      items.forEach(it=>{(byCat[it.cat]=byCat[it.cat]||[]).push(it);});
+      const catOrder=Object.entries(byCat)
+        .map(([cat,its])=>[cat,its,its.reduce((s,it)=>s+it.remaining*it.monthlyAmt,0)])
+        .sort((a,b)=>b[2]-a[2]);
+      instEl.innerHTML=catOrder.map(([cat,its,catTotal])=>
+        '<div style="padding:12px 0;border-bottom:1px solid var(--border)">'+
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">'+
+            '<div style="font-weight:600;font-size:13.5px">'+(BUDGET[cat]?BUDGET[cat].ico+' ':'📌 ')+cat+'</div>'+
+            '<div style="font-size:12px;color:var(--muted)">סה"כ '+fmt(catTotal)+' שנותר</div>'+
+          '</div>'+
+          its.map(it=>
+            '<div style="display:flex;justify-content:space-between;font-size:12.5px;color:var(--ink2);padding:3px 0 3px 14px">'+
+              '<span>'+it.desc+'</span>'+
+              '<span>עוד '+it.remaining+' של '+fmt(it.monthlyAmt)+' — '+fmt(it.remaining*it.monthlyAmt)+'</span>'+
+            '</div>'
+          ).join('')+
+        '</div>'
+      ).join('');
+    }
+  }
+}
+
 function go(name,el){
   document.querySelectorAll('.pg').forEach(p=>p.classList.remove('on'));
   document.querySelectorAll('.ni').forEach(n=>n.classList.remove('on'));
@@ -1020,6 +1115,7 @@ function go(name,el){
   if(name==='reports')buildReports();
   if(name==='categories')buildCategoriesPage();
   if(name==='insights')buildInsights();
+  if(name==='bottomline')buildBottomLine();
 }
 
 function stt(t){ttype=t;document.getElementById('te').classList.toggle('on',t==='expense');document.getElementById('ti').classList.toggle('on',t==='income');}
