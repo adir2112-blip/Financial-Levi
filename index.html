@@ -1377,14 +1377,16 @@ function importExcelMulti(input) {
         TXS.sort((a,b)=>{const pd=s=>{if(!s)return 0;const[d,m]=s.split('/');return parseInt(m)*100+parseInt(d);};return pd(b.date)-pd(a.date);});
         input.value = '';
         refreshAll();
-        saveAllTxsToDB().catch(console.error);
         // עדכן יתרה שחולצה מהקובץ
         const newBal=localStorage.getItem('kessef_balance');
         if(newBal){document.getElementById('s-balance').textContent=fmt(parseFloat(newBal));document.getElementById('s-balance-d').textContent='מעו"ש הפועלים';}
         toast('✓ יובאו ' + totalAdded + ' עסקאות מ-' + files.length + ' קבצים');
         const ending = detectEndingInstallments(allParsedTxs);
         if (ending.length) showEndingInstallments(ending);
-        triggerBudgetCheck();
+        // חשוב: מחכים שהשמירה בענן *באמת* תסתיים לפני שמבקשים מהבוט לבדוק —
+        // אחרת הבוט קורא מהענן לפני שהעסקאות החדשות בכלל הגיעו אליו, ושולח
+        // הודעת וואטסאפ עם נתונים ישנים (זה בדיוק הבאג שהיה כאן).
+        saveAllTxsToDB().catch(console.error).finally(()=>triggerBudgetCheck());
       }
     };
     reader.readAsArrayBuffer(file);
