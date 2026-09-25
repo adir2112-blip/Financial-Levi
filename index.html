@@ -390,6 +390,7 @@ table.tx td{padding:10px 17px;font-size:12.5px;vertical-align:middle}
   <div class="ph">
     <div><div class="ph-head">💵 שורה תחתונה</div><div class="ph-sub">תמונת מצב פיננסית — המחזור הנוכחי</div></div>
   </div>
+  <div id="bl-vs-last" style="margin-bottom:16px"></div>
   <div class="sg" id="bl-stats" style="grid-template-columns:repeat(3,1fr);margin-bottom:16px"></div>
   <div class="card" style="margin-bottom:16px">
     <div class="ch"><div class="ct">📈 מגמת תזרים חודשי — מחזורים אחרונים</div></div>
@@ -1152,6 +1153,28 @@ function buildBottomLine(){
     statsEl.innerHTML=cards.map(c=>
       '<div class="sc"><div class="sc-lbl">'+c.lbl+'</div><div class="sc-val '+c.cls+'">'+fmt(c.val)+'</div></div>'
     ).join('');
+  }
+
+  // השוואה לבדיקה הקודמת — אותו סנאפשוט שהבוט כותב אחרי כל ייבוא (kessef_last_snapshot),
+  // כדי שהאתר והוואטסאפ יראו תמיד את אותה השוואה ולא יתערבבו ביניהם
+  const vsEl=document.getElementById('bl-vs-last');
+  if(vsEl){
+    let snap=null;
+    try{const raw=JSON.parse(localStorage.getItem('kessef_last_snapshot')||'null');if(raw&&raw.key===key)snap=raw;}catch(e){snap=null;}
+    if(!snap){
+      vsEl.innerHTML='';
+    }else{
+      const avgDiff=dailyAvg-snap.dailyAvg;
+      const projDiff=eomProjection-snap.eomProjection;
+      const avgTrend=avgDiff<-1?{ico:'📉',txt:'ירד (משתפר!)',cls:'g'}:avgDiff>1?{ico:'📈',txt:'עלה (מחמיר)',cls:'r'}:{ico:'➡️',txt:'כמעט ללא שינוי',cls:''};
+      vsEl.innerHTML='<div class="card" style="padding:14px 19px">'+
+        '<div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px">לעומת הבדיקה הקודמת ('+new Date(snap.savedAt).toLocaleString('he-IL',{day:'numeric',month:'numeric',hour:'2-digit',minute:'2-digit'})+')</div>'+
+        '<div style="display:flex;gap:24px;flex-wrap:wrap;font-size:13px">'+
+          '<span>'+avgTrend.ico+' הוצאה יומית: <strong'+(avgTrend.cls?' style="color:var(--'+(avgTrend.cls==='g'?'olive':'red')+')"':'')+'>'+fmt(dailyAvg)+'</strong> (היה '+fmt(snap.dailyAvg)+')</span>'+
+          '<span>'+(Math.abs(projDiff)>1?(projDiff>0?'📈 השתפר':'📉 החמיר')+' ב-'+fmt(Math.abs(projDiff)):'➡️ ללא שינוי משמעותי')+' בצפי לסוף המחזור</span>'+
+        '</div>'+
+      '</div>';
+    }
   }
 
   // תשלומים פעילים לפי קטגוריה — אותה לוגיקה כמו בבוט (כולל דריסה ידנית אם הוגדרה)
