@@ -1149,6 +1149,8 @@ function buildBottomLine(){
   const accountBalanceOnCycleEnd=interim.result-dailyAvg*remainingDays;
   // חיסכון אמיתי (תזרים בלבד) — בלי העו"ש, כי עו"ש הוא כסף שכבר קיים, לא כסף שנחסך
   const netSavingsProjected=accountBalanceOnCycleEnd-interim.bal;
+  // חיסכון נכון להיום — בלי עו"ש ובלי שום השלכה קדימה, רק מה שכבר קרה בפועל עד עכשיו
+  const netSavingsSoFar=interim.totalInc-cardExp-interim.recurringExp;
   const cycleEndLbl=r?(r.to.getDate()+'/'+(r.to.getMonth()+1)):'';
 
   const cards=[
@@ -1157,8 +1159,9 @@ function buildBottomLine(){
     {lbl:'הוצאות מסטרקארד (אדיר)',val:interim.mcExp,cls:'r'},
     {lbl:'הוצאות קבועות (משכנתא וכו\')',val:interim.recurringExp,cls:'r'},
     {lbl:'עו"ש נוכחי',val:interim.bal,cls:''},
+    {lbl:'סה"כ חיסכון נכון להיום (בלי עו"ש)',val:netSavingsSoFar,cls:netSavingsSoFar>=0?'g':'r'},
     {lbl:'צפי יתרת חשבון ב-'+cycleEndLbl,val:accountBalanceOnCycleEnd,cls:accountBalanceOnCycleEnd>=0?'g':'r'},
-    {lbl:'סה"כ חיסכון צפוי (בלי עו"ש)',val:netSavingsProjected,cls:netSavingsProjected>=0?'g':'r'},
+    {lbl:'סה"כ חיסכון צפוי לסוף המחזור (בלי עו"ש)',val:netSavingsProjected,cls:netSavingsProjected>=0?'g':'r'},
   ];
   const statsEl=document.getElementById('bl-stats');
   if(statsEl){
