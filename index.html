@@ -1138,15 +1138,20 @@ function buildBottomLine(){
   const remainingDays=Math.max(0,totalDays-passedDays);
   const cardExp=interim.maxExp+interim.mcExp;
   const dailyAvg=cardExp/passedDays;
-  const eomProjection=interim.result-dailyAvg*remainingDays;
+  // צפי יתרת חשבון (כולל העו"ש) בסוף המחזור — "כמה יהיה בפועל בבנק ב-10 לחודש"
+  const accountBalanceOnCycleEnd=interim.result-dailyAvg*remainingDays;
+  // חיסכון אמיתי (תזרים בלבד) — בלי העו"ש, כי עו"ש הוא כסף שכבר קיים, לא כסף שנחסך
+  const netSavingsProjected=accountBalanceOnCycleEnd-interim.bal;
+  const cycleEndLbl=r?(r.to.getDate()+'/'+(r.to.getMonth()+1)):'';
 
   const cards=[
     {lbl:'הכנסות (סה"כ)',val:interim.totalInc,cls:'g'},
     {lbl:'הוצאות MAX (יקירה)',val:interim.maxExp,cls:'r'},
     {lbl:'הוצאות מסטרקארד (אדיר)',val:interim.mcExp,cls:'r'},
     {lbl:'הוצאות קבועות (משכנתא וכו\')',val:interim.recurringExp,cls:'r'},
-    {lbl:'סה"כ חיסכון נכון לעכשיו',val:interim.result,cls:interim.result>=0?'g':'r'},
-    {lbl:'סה"כ חיסכון צפוי (לפי קצב יומי)',val:eomProjection,cls:eomProjection>=0?'g':'r'},
+    {lbl:'עו"ש נוכחי',val:interim.bal,cls:''},
+    {lbl:'צפי יתרת חשבון ב-'+cycleEndLbl,val:accountBalanceOnCycleEnd,cls:accountBalanceOnCycleEnd>=0?'g':'r'},
+    {lbl:'סה"כ חיסכון צפוי (בלי עו"ש)',val:netSavingsProjected,cls:netSavingsProjected>=0?'g':'r'},
   ];
   const statsEl=document.getElementById('bl-stats');
   if(statsEl){
@@ -1165,7 +1170,7 @@ function buildBottomLine(){
       vsEl.innerHTML='';
     }else{
       const avgDiff=dailyAvg-snap.dailyAvg;
-      const projDiff=eomProjection-snap.eomProjection;
+      const projDiff=accountBalanceOnCycleEnd-snap.eomProjection;
       const avgTrend=avgDiff<-1?{ico:'📉',txt:'ירד (משתפר!)',cls:'g'}:avgDiff>1?{ico:'📈',txt:'עלה (מחמיר)',cls:'r'}:{ico:'➡️',txt:'כמעט ללא שינוי',cls:''};
       vsEl.innerHTML='<div class="card" style="padding:14px 19px">'+
         '<div style="font-size:11px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px">לעומת הבדיקה הקודמת ('+new Date(snap.savedAt).toLocaleString('he-IL',{day:'numeric',month:'numeric',hour:'2-digit',minute:'2-digit'})+')</div>'+
@@ -1276,7 +1281,8 @@ function buildSimulator(){
   const remainingDays=Math.max(0,totalDays-passedDays);
   const cardExp=interim.maxExp+interim.mcExp;
   const dailyAvg=cardExp/passedDays;
-  const baseProjection=interim.result-dailyAvg*remainingDays;
+  // חיסכון (בלי עו"ש — זה כסף קיים, לא כסף שנחסך) — עקבי עם "שורה תחתונה"
+  const baseProjection=(interim.result-dailyAvg*remainingDays)-interim.bal;
 
   const baseEl=document.getElementById('sim-base');
   if(baseEl)baseEl.textContent=fmt(baseProjection);
