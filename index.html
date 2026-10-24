@@ -203,6 +203,10 @@ table.tx td{padding:10px 17px;font-size:12.5px;vertical-align:middle}
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>
       שורה תחתונה
     </div>
+    <div class="ni" onclick="go('reportslog',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>
+      דיווחים
+    </div>
   </nav>
   <div class="sb-foot">
     <div class="sb-ft">מקורות</div>
@@ -411,6 +415,15 @@ table.tx td{padding:10px 17px;font-size:12.5px;vertical-align:middle}
     <div id="bl-installments"></div>
   </div>
 </div>
+<!-- REPORTS LOG -->
+<div class="pg" id="pg-reportslog">
+  <div class="ph">
+    <div><div class="ph-head">📋 דיווחים</div><div class="ph-sub">היסטוריית ייבוא קבצים — האם משתפרים בין דיווח לדיווח</div></div>
+  </div>
+  <div class="txcard">
+    <table class="tx" id="reports-log-table"></table>
+  </div>
+</div>
 </main>
 <!-- MODALS -->
 <div class="ov" id="ov" onclick="clo(event)">
@@ -528,6 +541,7 @@ table.tx td{padding:10px 17px;font-size:12.5px;vertical-align:middle}
     <div class="fg"><label class="fl">הכנסה קבועה — יקירה (₪)</label><input class="fi" id="interim-yekira" type="number" placeholder="9500"></div>
     <div class="fg"><label class="fl">הכנסות אדיר — עסק נוסף (₪)</label><input class="fi" id="interim-adirbiz" type="number" placeholder="4000"></div>
     <div class="fg"><label class="fl">תגמול ביטוח לאומי — אדיר (₪)</label><input class="fi" id="interim-bituach" type="number" placeholder="1000"></div>
+    <div class="fg"><label class="fl">קצבת ילדים (ביטוח לאומי) (₪)</label><input class="fi" id="interim-children" type="number" placeholder="450"></div>
     <div class="fg" style="border-top:1px solid var(--border);padding-top:14px;margin-top:2px"><label class="fl">יעד חיסכון חודשי (₪)</label><input class="fi" id="interim-goal" type="number" placeholder="לדוגמה: 2000"></div>
     <div class="mact">
       <button class="mcanc" onclick="closeInterimEdit()">ביטול</button>
@@ -1326,6 +1340,36 @@ function updateSimulator(){
   if(resEl){resEl.textContent=fmt(result);resEl.style.color=result>=0?'var(--olive)':'var(--red)';}
 }
 
+// ══════════════════════════════════════════
+// דיווחים — היסטוריית ייבוא קבצים (kessef_reports_log, נכתב ע"י הבוט בכל
+// ייבוא בפועל), כדי לראות אם משתפרים בין דיווח לדיווח
+// ══════════════════════════════════════════
+function buildReportsLog(){
+  const el=document.getElementById('reports-log-table');
+  if(!el)return;
+  let log=[];
+  try{log=JSON.parse(localStorage.getItem('kessef_reports_log')||'[]');}catch(e){log=[];}
+  if(!log.length){
+    el.innerHTML='<tbody><tr><td class="empty">אין עדיין דיווחים — הם נוספים אוטומטית בכל ייבוא קובץ</td></tr></tbody>';
+    return;
+  }
+  log=[...log].sort((a,b)=>new Date(a.date)-new Date(b.date)); // כרונולוגי, כדי לחשב הפרש נכון
+  const rows=log.map((r,i)=>{
+    const prev=i>0?log[i-1]:null;
+    const diff=prev?r.dailyAvg-prev.dailyAvg:null;
+    const diffHtml=diff===null?'<span style="color:var(--faint)">—</span>':
+      Math.abs(diff)<1?'<span style="color:var(--muted)">ללא שינוי</span>':
+      diff<0?'<span style="color:var(--olive)">📉 '+fmt(Math.abs(diff))+' (משתפר)</span>':
+      '<span style="color:var(--red)">📈 '+fmt(diff)+' (מחמיר)</span>';
+    const d=new Date(r.date);
+    const dateStr=d.toLocaleString('he-IL',{day:'numeric',month:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit'});
+    return {dateStr,sortDate:d,avg:r.dailyAvg,diffHtml};
+  }).reverse(); // להצגה: החדש ביותר ראשון
+  el.innerHTML='<thead><tr><th>תאריך דיווח</th><th>ממוצע הוצאות יומי</th><th>הפרש מהדיווח הקודם</th></tr></thead><tbody>'+
+    rows.map(r=>'<tr><td class="tdate">'+r.dateStr+'</td><td>'+fmt(r.avg)+'</td><td>'+r.diffHtml+'</td></tr>').join('')+
+    '</tbody>';
+}
+
 function go(name,el){
   document.querySelectorAll('.pg').forEach(p=>p.classList.remove('on'));
   document.querySelectorAll('.ni').forEach(n=>n.classList.remove('on'));
@@ -1339,6 +1383,7 @@ function go(name,el){
   if(name==='categories')buildCategoriesPage();
   if(name==='insights')buildInsights();
   if(name==='bottomline')buildBottomLine();
+  if(name==='reportslog')buildReportsLog();
 }
 
 function stt(t){ttype=t;document.getElementById('te').classList.toggle('on',t==='expense');document.getElementById('ti').classList.toggle('on',t==='income');}
@@ -1894,7 +1939,7 @@ function saveBalance(){
 // ══════════════════════════════════════════
 // ברירות מחדל להכנסות הקבועות — כפי שנמסרו: אדיר 15,000 נטו, עסק נוסף 4,000,
 // ביטוח לאומי 1,000, יקירה 9,500 בממוצע. כל אחד ניתן לעריכה דרך המודאל.
-const INTERIM_DEFAULTS={adir:15000,yekira:9500,adirbiz:4000,bituach:1000};
+const INTERIM_DEFAULTS={adir:15000,yekira:9500,adirbiz:4000,bituach:1000,children:450};
 function interimVal(key){
   const raw=localStorage.getItem('kessef_income_'+key);
   return raw===null?INTERIM_DEFAULTS[key]:(parseFloat(raw)||0);
@@ -1904,6 +1949,7 @@ function openInterimEdit(){
   document.getElementById('interim-yekira').value=interimVal('yekira');
   document.getElementById('interim-adirbiz').value=interimVal('adirbiz');
   document.getElementById('interim-bituach').value=interimVal('bituach');
+  document.getElementById('interim-children').value=interimVal('children');
   const goalEl=document.getElementById('interim-goal');
   if(goalEl)goalEl.value=localStorage.getItem('kessef_savings_goal')||'';
   document.getElementById('ov-interim').classList.add('open');
@@ -1914,6 +1960,7 @@ function saveInterim(){
   saveSettingToDB('kessef_income_yekira',parseFloat(document.getElementById('interim-yekira').value)||0);
   saveSettingToDB('kessef_income_adirbiz',parseFloat(document.getElementById('interim-adirbiz').value)||0);
   saveSettingToDB('kessef_income_bituach',parseFloat(document.getElementById('interim-bituach').value)||0);
+  saveSettingToDB('kessef_income_children',parseFloat(document.getElementById('interim-children').value)||0);
   const goalEl=document.getElementById('interim-goal');
   if(goalEl)saveSettingToDB('kessef_savings_goal',parseFloat(goalEl.value)||0);
   closeInterimEdit();
@@ -1924,7 +1971,7 @@ function saveInterim(){
 // נעשה שיתוף בין renderInterim (הכרטיס הייעודי) לבין renderDashboard (צפי סיום מחזור)
 function computeInterim(key){
   const bal=parseFloat(localStorage.getItem('kessef_balance')||'0');
-  const totalInc=interimVal('adir')+interimVal('yekira')+interimVal('adirbiz')+interimVal('bituach');
+  const totalInc=interimVal('adir')+interimVal('yekira')+interimVal('adirbiz')+interimVal('bituach')+interimVal('children');
   const cycleTxs=txsInCycle(key||activeDashCycle||currentCycleKey());
   const maxExp=cycleTxs.filter(t=>t.tp==='expense'&&t.src==='max').reduce((s,t)=>s+Math.abs(t.amt),0);
   const mcExp=cycleTxs.filter(t=>t.tp==='expense'&&t.src==='isracard').reduce((s,t)=>s+Math.abs(t.amt),0);
