@@ -70,9 +70,10 @@ body{font-family:'Heebo',sans-serif;background:var(--cream);color:var(--ink);min
 .ls{width:9px;height:4px;border-radius:2px}
 .bars{display:flex;align-items:flex-end;gap:4px;height:112px;margin-top:6px}
 .bg{flex:1;display:flex;gap:2px;align-items:flex-end}
-.bar{flex:1;border-radius:3px 3px 0 0;cursor:pointer;transition:opacity .15s}
+.bar{flex:1;border-radius:3px 3px 0 0;cursor:pointer;transition:opacity .15s;position:relative}
 .bar:hover{opacity:.8}
 .bar.i{background:var(--olive-mid)}.bar.e{background:#e8c9a0}
+.bar-val{position:absolute;bottom:100%;left:50%;transform:translateX(-50%);margin-bottom:2px;font-size:9px;color:var(--ink2);white-space:nowrap;pointer-events:none}
 .bls{display:flex;gap:4px;margin-top:6px}
 .bl{flex:1;text-align:center;font-size:10px;color:var(--faint)}
 .dn-out{display:flex;flex-direction:column;align-items:center}
@@ -612,6 +613,8 @@ const CC=['#b8d4b5','#e8c9a0','#c8a84b','#d47070','#93b8d8','#b8a8d4','#a8c4d4',
 const sl=s=>({'hapoalim':'הפועלים','isracard':'ישראכרט','max':'MAX','manual':'ידני'}[s]||s);
 const sc=s=>({'hapoalim':'#d47070','isracard':'#c8a84b','max':'#5a8fc0','manual':'#aaa'}[s]||'#aaa');
 const fmt=n=>'₪'+Math.round(n).toLocaleString();
+// פורמט מקוצר לתוויות קטנות בתוך תרשימים (למשל מעל עמודה צרה) — אין מקום ל"₪12,345" שם
+const fmtShort=n=>{const v=Math.round(n);return Math.abs(v)>=1000?'₪'+(v/1000).toFixed(1).replace(/\.0$/,'')+'k':'₪'+v;};
 
 function txDate(s,tp){if(!s)return null;const[d,m]=s.split('/').map(Number);if(!d||!m)return null;const now=new Date();let y=now.getFullYear();if(m>now.getMonth()+3)y--;return new Date(y,m-1,d);}
 
@@ -833,7 +836,9 @@ function renderBars(){
   const recurringExp=RECURRING.reduce((s,r)=>s+r.amt,0); // חיובים קבועים (משכנתא/ביטוחים) לא נרשמים כעסקאות, אז בלעדיהם "הוצאות" כאן היה נראה נמוך מהמצב האמיתי
   const data=keys.map(k=>{const txs=txsInCycle(k);const cardExp=txs.filter(t=>t.tp==='expense'&&(t.src==='max'||t.src==='isracard')).reduce((s,t)=>s+Math.abs(t.amt),0);return{inc:totalInc,exp:cardExp+recurringExp,label:cycleLabel(k).substring(3,8)};});
   const mx=Math.max(...data.map(d=>Math.max(d.inc,d.exp)),1);
-  document.getElementById('bw').innerHTML=data.map(d=>'<div class="bg"><div class="bar i" style="height:'+Math.round(d.inc/mx*108)+'px" title="הכנסות: '+fmt(d.inc)+'"></div><div class="bar e" style="height:'+Math.round(d.exp/mx*108)+'px" title="הוצאות: '+fmt(d.exp)+'"></div></div>').join('');
+  // גובה מוגבל ל-80 מתוך 112 (ולא כל הגובה) כדי שיישאר מקום לתווית הסכום
+  // שמוצגת קבוע מעל כל עמודה, ולא רק ב-hover
+  document.getElementById('bw').innerHTML=data.map(d=>'<div class="bg"><div class="bar i" style="height:'+Math.round(d.inc/mx*80)+'px" title="הכנסות: '+fmt(d.inc)+'"><span class="bar-val">'+fmtShort(d.inc)+'</span></div><div class="bar e" style="height:'+Math.round(d.exp/mx*80)+'px" title="הוצאות: '+fmt(d.exp)+'"><span class="bar-val">'+fmtShort(d.exp)+'</span></div></div>').join('');
   document.getElementById('bl').innerHTML=data.map(d=>'<div class="bl">'+d.label+'</div>').join('');
 }
 
