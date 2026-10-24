@@ -826,7 +826,12 @@ function renderDonut(txs){
 function renderBars(){
   const keys=allCycleKeys().slice(0,6).reverse();
   if(!keys.length)return;
-  const data=keys.map(k=>{const txs=txsInCycle(k);return{inc:txs.filter(t=>t.tp==='income').reduce((s,t)=>s+t.amt,0),exp:txs.filter(t=>t.tp==='expense').reduce((s,t)=>s+Math.abs(t.amt),0),label:cycleLabel(k).substring(3,8)};});
+  // ההכנסה האמיתית היא ההכנסות הקבועות (מצב ביניים/שורה תחתונה), לא עסקאות
+  // tp==='income' — אלה כמעט ולא קיימות בפועל, אז מולן ההוצאות היו נראות
+  // כאילו "בולעות" את כל ההכנסה. עקבי עם computeInterim/renderSavingsTrend.
+  const totalInc=interimVal('adir')+interimVal('yekira')+interimVal('adirbiz')+interimVal('bituach')+interimVal('children');
+  const recurringExp=RECURRING.reduce((s,r)=>s+r.amt,0); // חיובים קבועים (משכנתא/ביטוחים) לא נרשמים כעסקאות, אז בלעדיהם "הוצאות" כאן היה נראה נמוך מהמצב האמיתי
+  const data=keys.map(k=>{const txs=txsInCycle(k);const cardExp=txs.filter(t=>t.tp==='expense'&&(t.src==='max'||t.src==='isracard')).reduce((s,t)=>s+Math.abs(t.amt),0);return{inc:totalInc,exp:cardExp+recurringExp,label:cycleLabel(k).substring(3,8)};});
   const mx=Math.max(...data.map(d=>Math.max(d.inc,d.exp)),1);
   document.getElementById('bw').innerHTML=data.map(d=>'<div class="bg"><div class="bar i" style="height:'+Math.round(d.inc/mx*108)+'px" title="הכנסות: '+fmt(d.inc)+'"></div><div class="bar e" style="height:'+Math.round(d.exp/mx*108)+'px" title="הוצאות: '+fmt(d.exp)+'"></div></div>').join('');
   document.getElementById('bl').innerHTML=data.map(d=>'<div class="bl">'+d.label+'</div>').join('');
@@ -1278,7 +1283,7 @@ function renderSavingsTrend(){
   if(!canvas)return;
   const keys=allCycleKeys().slice(0,8).reverse();
   if(!keys.length)return;
-  const totalInc=interimVal('adir')+interimVal('yekira')+interimVal('adirbiz')+interimVal('bituach');
+  const totalInc=interimVal('adir')+interimVal('yekira')+interimVal('adirbiz')+interimVal('bituach')+interimVal('children');
   const recurringExp=RECURRING.reduce((s,r)=>s+r.amt,0);
   const data=keys.map(k=>{
     const txs=txsInCycle(k);
