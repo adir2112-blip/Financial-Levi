@@ -420,10 +420,17 @@ table.tx td{padding:10px 17px;font-size:12.5px;vertical-align:middle}
   <div class="ph">
     <div><div class="ph-head">📋 דיווחים</div><div class="ph-sub">היסטוריית ייבוא קבצים — האם משתפרים בין דיווח לדיווח</div></div>
   </div>
+  <div id="reports-log-streak"></div>
   <div class="card" style="margin-bottom:16px">
     <div class="ch"><div class="ct">📈 מגמת ממוצע ההוצאה היומית</div></div>
     <div style="font-size:11.5px;color:var(--muted);margin-bottom:10px">כל נקודה היא דיווח אחד — ירידה בקו אומרת שמשתפרים בין דיווח לדיווח</div>
     <div style="position:relative;height:220px"><canvas id="reports-log-chart"></canvas></div>
+  </div>
+  <div class="card" style="margin-bottom:16px">
+    <div class="ch"><div class="ct">⚖️ קבועות מול גמישות</div></div>
+    <div style="font-size:11.5px;color:var(--muted);margin-bottom:10px">כמה מההוצאה היא חובה (חיובים קבועים) וכמה אפשר בכלל לקצץ (הוצאות כרטיסים) — ככל שהחלק הגמיש קטן יותר, יש פחות מרחב תמרון</div>
+    <div id="reports-ratio-now" style="margin-bottom:10px"></div>
+    <div style="position:relative;height:160px"><canvas id="reports-ratio-chart"></canvas></div>
   </div>
   <div class="txcard">
     <table class="tx" id="reports-log-table"></table>
@@ -1354,12 +1361,15 @@ function buildReportsLog(){
   if(!el)return;
   let log=[];
   try{log=JSON.parse(localStorage.getItem('kessef_reports_log')||'[]');}catch(e){log=[];}
+  const streakEl=document.getElementById('reports-log-streak');
   if(!log.length){
     el.innerHTML='<tbody><tr><td class="empty">אין עדיין דיווחים — הם נוספים אוטומטית בכל ייבוא קובץ</td></tr></tbody>';
+    if(streakEl)streakEl.innerHTML='';
     return;
   }
   log=[...log].sort((a,b)=>new Date(a.date)-new Date(b.date)); // כרונולוגי, כדי לחשב הפרש נכון
   renderReportsLogChart(log);
+  renderReportsRatioChart(log);
   const rows=log.map((r,i)=>{
     const prev=i>0?log[i-1]:null;
     const diff=prev?r.dailyAvg-prev.dailyAvg:null;
@@ -1367,13 +1377,87 @@ function buildReportsLog(){
       Math.abs(diff)<1?'<span style="color:var(--muted)">ללא שינוי</span>':
       diff<0?'<span style="color:var(--olive)">📉 '+fmt(Math.abs(diff))+' (משתפר)</span>':
       '<span style="color:var(--red)">📈 '+fmt(diff)+' (מחמיר)</span>';
+    // פילוח לפי קטגוריה — רק אם שני הדיווחים מאותו מחזור (אחרת ההשוואה לא
+    // רלוונטית, כי כל מחזור מתחיל למנות הוצאות מאפס) ושניהם אכן כוללים catExp
+    let catHtml='';
+    if(prev&&prev.key===r.key&&r.catExp&&prev.catExp){
+      const cats=new Set([...Object.keys(r.catExp),...Object.keys(prev.catExp)]);
+      const catDiffs=[...cats].map(c=>[c,(r.catExp[c]||0)-(prev.catExp[c]||0)]).filter(([,d])=>Math.abs(d)>=10);
+      catDiffs.sort((a,b)=>Math.abs(b[1])-Math.abs(a[1]));
+      const top=catDiffs.slice(0,2);
+      if(top.length){
+        catHtml='<div style="font-size:10.5px;color:var(--muted);margin-top:2px">בעיקר: '+
+          top.map(([c,d])=>c+' '+(d>0?'+':'')+fmt(d)).join(', ')+'</div>';
+      }
+    }
+    // פער מהיעד באותו רגע (בקצב הצפוי אז) — כדי לראות אם מתקרבים ליעד או מתרחקים ממנו
+    let gapHtml='<span style="color:var(--faint)">—</span>';
+    if(r.goal>0&&r.netSavingsProjected!==undefined){
+      const gap=r.netSavingsProjected-r.goal;
+      gapHtml=gap>=0?'<span style="color:var(--olive)">✓ מעל היעד ב-'+fmt(gap)+'</span>':
+        '<span style="color:var(--red)">מתחת ליעד ב-'+fmt(Math.abs(gap))+'</span>';
+    }
     const d=new Date(r.date);
     const dateStr=d.toLocaleString('he-IL',{day:'numeric',month:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit'});
-    return {dateStr,sortDate:d,avg:r.dailyAvg,diffHtml};
+    return {dateStr,sortDate:d,avg:r.dailyAvg,diffHtml,catHtml,gapHtml};
   }).reverse(); // להצגה: החדש ביותר ראשון
-  el.innerHTML='<thead><tr><th>תאריך דיווח</th><th>ממוצע הוצאות יומי</th><th>הפרש מהדיווח הקודם</th></tr></thead><tbody>'+
-    rows.map(r=>'<tr><td class="tdate">'+r.dateStr+'</td><td>'+fmt(r.avg)+'</td><td>'+r.diffHtml+'</td></tr>').join('')+
+  el.innerHTML='<thead><tr><th>תאריך דיווח</th><th>ממוצע הוצאות יומי</th><th>הפרש מהדיווח הקודם</th><th>פער מהיעד (בקצב הנוכחי)</th></tr></thead><tbody>'+
+    rows.map(r=>'<tr><td class="tdate">'+r.dateStr+'</td><td>'+fmt(r.avg)+'</td><td>'+r.diffHtml+r.catHtml+'</td><td>'+r.gapHtml+'</td></tr>').join('')+
     '</tbody>';
+  if(streakEl)streakEl.innerHTML=buildReportsStreakBadge(log);
+}
+// רצף דיווחים רצופים של שיפור (ירידה בממוצע היומי) — מוטיבציה פשוטה שמבוססת
+// על נתון שכבר קיים (diff), בלי לדרוש שום נתון נוסף מהבוט
+function buildReportsStreakBadge(logAsc){
+  let streak=0;
+  for(let i=logAsc.length-1;i>0;i--){
+    if(logAsc[i].dailyAvg-logAsc[i-1].dailyAvg<-1)streak++;
+    else break;
+  }
+  if(streak<2)return '';
+  return '<div class="card" style="margin-bottom:16px;background:linear-gradient(90deg,rgba(143,179,137,0.15),transparent);border-color:var(--olive)">'+
+    '<div style="font-size:14px;font-weight:600;color:var(--olive)">🔥 '+streak+' דיווחים רצופים של שיפור!</div>'+
+    '<div style="font-size:11.5px;color:var(--muted);margin-top:2px">ממוצע ההוצאה היומית יורד ברצף — כל הכבוד, ממשיכים כך</div>'+
+  '</div>';
+}
+// יחס קבועות (חובה) מול גמישות (כרטיסים, אפשר לקצץ) — ככל שהחלק הגמיש קטן
+// יותר כיחס מכל ההוצאה, יש פחות "מרחב תמרון" לחיסכון נוסף
+function renderReportsRatioChart(log){
+  const nowEl=document.getElementById('reports-ratio-now');
+  const canvas=document.getElementById('reports-ratio-chart');
+  const withRatio=log.filter(r=>r.recurringExp!==undefined&&r.cardExp!==undefined);
+  if(!withRatio.length){
+    if(nowEl)nowEl.innerHTML='<div style="color:var(--muted);font-size:12.5px">אין עדיין מספיק נתונים — מצטבר מהדיווח הבא</div>';
+    if(canvas&&window._reportsRatioChart){window._reportsRatioChart.destroy();window._reportsRatioChart=null;}
+    return;
+  }
+  const latest=withRatio[withRatio.length-1];
+  const totalNow=latest.recurringExp+latest.cardExp;
+  const flexPctNow=totalNow>0?Math.round(latest.cardExp/totalNow*100):0;
+  if(nowEl){
+    nowEl.innerHTML='<div style="display:flex;gap:10px;align-items:center">'+
+      '<div style="flex:1;height:14px;border-radius:7px;overflow:hidden;display:flex;background:var(--border)">'+
+        '<div style="width:'+flexPctNow+'%;background:#e0a05a"></div>'+
+        '<div style="width:'+(100-flexPctNow)+'%;background:#8fb389"></div>'+
+      '</div>'+
+      '<div style="font-size:12.5px;white-space:nowrap"><span style="color:#e0a05a;font-weight:600">'+flexPctNow+'% גמיש</span> · <span style="color:#8fb389;font-weight:600">'+(100-flexPctNow)+'% קבוע</span></div>'+
+    '</div>';
+  }
+  if(!canvas)return;
+  const labels=withRatio.map(r=>new Date(r.date).toLocaleString('he-IL',{day:'numeric',month:'numeric'}));
+  const data=withRatio.map(r=>{const t=r.recurringExp+r.cardExp;return t>0?Math.round(r.cardExp/t*100):0;});
+  const ctx=canvas.getContext('2d');
+  if(window._reportsRatioChart){window._reportsRatioChart.destroy();}
+  window._reportsRatioChart=new Chart(ctx,{
+    type:'line',
+    data:{labels,datasets:[{label:'% גמיש מתוך ההוצאה',data,borderColor:'#e0a05a',backgroundColor:'rgba(224,160,90,0.12)',fill:true,tension:0.3,pointRadius:3}]},
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+c.parsed.y+'% גמיש'}}},
+      scales:{y:{min:0,max:100,ticks:{font:{size:10},callback:v=>v+'%'}},x:{ticks:{font:{size:10}}}},
+      animation:{duration:500}
+    }
+  });
 }
 function renderReportsLogChart(log){
   const canvas=document.getElementById('reports-log-chart');
