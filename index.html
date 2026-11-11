@@ -642,7 +642,22 @@ function cycleRange(key){if(!key)return null;const[y,m]=key.split('-').map(Numbe
 function cycleLabel(key){const[y,m]=key.split('-').map(Number);const nm=m===12?1:m+1,ny=m===12?y+1:y;return'11/'+String(m).padStart(2,'0')+'/'+y+' — 10/'+String(nm).padStart(2,'0')+'/'+ny;}
 function currentCycleKey(){const now=new Date();let m=now.getMonth()+1,y=now.getFullYear();if(now.getDate()<11){m--;if(m===0){m=12;y--;}}return y+'-'+String(m).padStart(2,'0');}
 function allCycleKeys(){const keys=new Set();for(const t of TXS){keys.add(txCycleKey(t));}return[...keys].sort().reverse();}
-function buildCycleSelect(id,active){const sel=document.getElementById(id);if(!sel)return;const keys=allCycleKeys();const cur=active||currentCycleKey();sel.innerHTML=keys.map(k=>'<option value="'+k+'"'+(k===cur?' selected':'')+'>'+cycleLabel(k)+'</option>').join('');}
+// מחזיר את המחזור שבאמת נבחר ב-<select> (לא בהכרח active שהועבר) — כדי
+// שהקורא יסנכרן את activeDashCycle/activeTxCycle אליו. בלי זה, אם למחזור
+// הנוכחי (לפי currentCycleKey, שמבוסס על תאריך היום) אין עדיין שום עסקה
+// (למשל ברגע שמחזור חדש מתחיל ועוד לא יובאו קבצים), האופציה שלו לא קיימת
+// ברשימה, אז הדפדפן "בוחר" ויזואלית את המחזור הראשון ברשימה (האחרון שיש בו
+// דאטה) — אבל activeDashCycle/activeTxCycle לא מתעדכן אליו, אז כל התצוגה
+// (המספרים בדשבורד/שורה תחתונה/מצב ביניים) ממשיכה להיות מחושבת למחזור הריק
+// שהבורר כבר לא מציג — פער בין מה שמוצג בבורר למה שבפועל מוצג בעמוד.
+function buildCycleSelect(id,active){
+  const sel=document.getElementById(id);if(!sel)return active;
+  const keys=allCycleKeys();
+  let cur=active||currentCycleKey();
+  if(keys.length&&!keys.includes(cur))cur=keys[0];
+  sel.innerHTML=keys.map(k=>'<option value="'+k+'"'+(k===cur?' selected':'')+'>'+cycleLabel(k)+'</option>').join('');
+  return cur;
+}
 function txsInCycle(key){return TXS.filter(t=>txCycleKey(t)===key);}
 
 function setDashCycle(key){activeDashCycle=key;renderDashboard();renderInterim();}
@@ -1505,8 +1520,8 @@ function go(name,el){
   document.querySelectorAll('.ni').forEach(n=>n.classList.remove('on'));
   document.getElementById('pg-'+name).classList.add('on');
   if(el)el.classList.add('on');
-  if(name==='dashboard'){buildCycleSelect('dashCycle',activeDashCycle);renderDashboard();}
-  if(name==='transactions'){buildCycleSelect('txCycle',activeTxCycle);renderTxTable();}
+  if(name==='dashboard'){activeDashCycle=buildCycleSelect('dashCycle',activeDashCycle);renderDashboard();}
+  if(name==='transactions'){activeTxCycle=buildCycleSelect('txCycle',activeTxCycle);renderTxTable();}
   if(name==='budget')buildBudget();
   if(name==='recurring')buildRecurring();
   if(name==='reports')buildReports();
@@ -1650,7 +1665,7 @@ function importExcel(input){
   };reader.readAsArrayBuffer(file);
 }
 
-function refreshAll(){buildCycleSelect('dashCycle',activeDashCycle);buildCycleSelect('txCycle',activeTxCycle);renderDashboard();renderTxTable();renderInterim();}
+function refreshAll(){activeDashCycle=buildCycleSelect('dashCycle',activeDashCycle);activeTxCycle=buildCycleSelect('txCycle',activeTxCycle);renderDashboard();renderTxTable();renderInterim();}
 
 function xlDate(raw){
   if(!raw)return'';
