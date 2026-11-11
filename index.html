@@ -251,6 +251,7 @@ table.tx td{padding:10px 17px;font-size:12.5px;vertical-align:middle}
     </div>
     <div id="interim-breakdown" style="display:flex;align-items:center;gap:9px;flex-wrap:wrap;font-size:12.5px;color:var(--ink2);margin-bottom:12px"></div>
     <div style="font-family:'Playfair Display',serif;font-size:27px;font-weight:500;letter-spacing:-.5px" id="interim-result">—</div>
+    <div style="font-size:12px;color:var(--muted);margin-top:4px" id="interim-dailyavg"></div>
   </div>
   <div class="forecast-row">
     <div class="fc"><div class="fc-title">צפי סיום מחזור</div><div class="fc-val" id="fc-eom" style="color:var(--olive)">—</div><div class="fc-sub" id="fc-eom-sub"></div><div class="fc-bar"><div class="fc-fill" id="fc-eom-bar" style="background:var(--olive-mid);width:0%"></div></div></div>
@@ -2125,6 +2126,19 @@ function renderInterim(){
     '<span style="color:var(--red)">חיובים קבועים: <strong>'+fmt(recurringExp)+'</strong></span>':'');
   const rEl=document.getElementById('interim-result');
   if(rEl){rEl.textContent=fmt(result);rEl.style.color=result>=0?'var(--olive)':'var(--red)';}
+  // ממוצע יומי (אותו חישוב מיוצב כמו בדשבורד/שורה תחתונה) — לתצוגה בלבד, לא
+  // משפיע על חישוב "מצב ביניים" עצמו
+  const avgEl=document.getElementById('interim-dailyavg');
+  if(avgEl){
+    const r=cycleRange(key),now=new Date();
+    const totalDays=r?Math.round((r.to-r.from)/86400000):30;
+    const passedDays=r?Math.max(1,Math.min(Math.round((now-r.from)/86400000),totalDays)):1;
+    const cycleTxsForAvg=txsInCycle(key).filter(t=>t.tp==='expense'&&(t.src==='max'||t.src==='isracard'));
+    const regularExp=cycleTxsForAvg.filter(t=>!t.instTotal).reduce((s,t)=>s+Math.abs(t.amt),0);
+    const instExp=cycleTxsForAvg.filter(t=>t.instTotal).reduce((s,t)=>s+Math.abs(t.amt),0);
+    const dailyAvgDisplay=(instExp/totalDays)+(regularExp/passedDays);
+    avgEl.textContent='ממוצע הוצאה יומי: '+fmt(dailyAvgDisplay)+' ליום ('+passedDays+' מתוך '+totalDays+' ימים)';
+  }
 }
 
 // ══════════════════════════════════════════
